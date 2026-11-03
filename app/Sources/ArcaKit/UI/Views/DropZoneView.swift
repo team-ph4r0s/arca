@@ -127,7 +127,7 @@ public struct DropZoneView: View {
                     state.openDocument(from: url)
                 }
             case .failure:
-                break
+                state.activeError = .io
             }
         }
     }

@@ -109,3 +109,33 @@ jobs:
             target/ios-logs/
             target/ios-test.xcresult
           if-no-files-found: ignore
+
+  release-ios:
+    name: Attach iOS builds to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ios-suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download iOS builds from this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name arca-ios-app --dir ios-build
+      - name: Attach builds once the Android release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 180); do
+            if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
+                ios-build/Arca-unsigned.ipa ios-build/Arca-simulator.app.zip
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Android release was not published; rerun this job after resolving its workflow failure." >&2
+          exit 1

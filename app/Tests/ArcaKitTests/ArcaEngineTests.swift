@@ -88,6 +88,30 @@ final class ArcaEngineTests: XCTestCase {
         XCTAssertFalse(items.isEmpty)
     }
 
+    @MainActor
+    func testAppStateLoadsPreviewForItsOpenDocument() async throws {
+        let state = AppState()
+        state.openDocument(from: try fixture("report.docx"))
+        for _ in 0..<600 {
+            if case .report = state.currentScreen { break }
+            if let error = state.activeError { throw error }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        guard case .report = state.currentScreen else {
+            XCTFail("Document did not reach the report screen")
+            return
+        }
+        let items = try await state.previewItems(section: 0, from: 0, count: 20)
+        XCTAssertFalse(items.isEmpty)
+        state.closeDocument()
+        do {
+            _ = try await state.previewItems(section: 0, from: 0, count: 20)
+            XCTFail("A closed document must not provide preview items")
+        } catch let error as ArcaError {
+            XCTAssertEqual(error, .badHandle)
+        }
+    }
+
     func testEncryptedDocumentAsksForAPasswordAndOpensWithIt() async throws {
         let locked = try await scan("enc-agile.docx")
         XCTAssertTrue(locked.needsPassword, "the app must ask for a password, not show a report")

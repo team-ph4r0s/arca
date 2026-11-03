@@ -118,6 +118,12 @@ public final class AppState: ObservableObject {
 
     // MARK: - Viewer Navigation
 
+    /// Loads preview items for the document currently owned by the app state.
+    public func previewItems(section: UInt32, from: UInt64, count: UInt32) async throws -> [PreviewItem] {
+        guard let session = activeDocument else { throw ArcaError.badHandle }
+        return try await engine.previewItems(document: session, section: section, from: from, count: count)
+    }
+
     /// Transitions to the safe read-only preview viewer.
     public func proceedToViewer(report: Report) {
         guard let session = activeDocument else { return }

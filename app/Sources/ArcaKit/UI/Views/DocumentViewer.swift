@@ -13,6 +13,7 @@ public struct DocumentViewer: View {
     @State private var items: [PreviewItem] = []
     @State private var isLoadingItems = false
     @State private var loadedCount: UInt64 = 0
+    @State private var loadGeneration = UUID()
     @State private var activeExternalUrl: URL?
 
     public init(report: Report, meta: PreviewMeta) {
@@ -39,7 +40,7 @@ public struct DocumentViewer: View {
                         ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                             renderItem(item)
                                 .onAppear {
-                                    if index == items.count - 10 {
+                                    if index == max(0, items.count - 10) {
                                         loadMoreItems()
                                     }
                                 }
@@ -292,6 +293,8 @@ public struct DocumentViewer: View {
     // MARK: - Pagination
 
     private func loadInitialItems() {
+        loadGeneration = UUID()
+        isLoadingItems = false
         items = []
         loadedCount = 0
         loadMoreItems()
@@ -307,27 +310,23 @@ public struct DocumentViewer: View {
         isLoadingItems = true
         let from = loadedCount
         let count: UInt32 = 64
+        let generation = loadGeneration
 
         Task {
             do {
-                if let session = state.engine as ArcaEngine? {
-                    // Fetch items via engine
-                    let batch = try await session.previewItems(
-                        document: DocumentSession(handle: 0), // Will be fetched via engine session
-                        section: currentSection,
-                        from: from,
-                        count: count
-                    )
-                    DispatchQueue.main.async {
-                        self.items.append(contentsOf: batch)
-                        self.loadedCount += UInt64(batch.count)
-                        self.isLoadingItems = false
-                    }
-                }
+                let batch = try await state.previewItems(section: currentSection, from: from, count: count)
+                guard generation == loadGeneration else { return }
+                isLoadingItems = false
+                items.append(contentsOf: batch)
+                loadedCount += UInt64(batch.count)
+            } catch let error as ArcaError {
+                guard generation == loadGeneration else { return }
+                isLoadingItems = false
+                state.activeError = error
             } catch {
-                DispatchQueue.main.async {
-                    self.isLoadingItems = false
-                }
+                guard generation == loadGeneration else { return }
+                isLoadingItems = false
+                state.activeError = .fault
             }
         }
     }
