@@ -2,6 +2,7 @@
 // Additional terms under AGPLv3 section 7: see LICENSE_ADDITIONAL_TERMS.md in the repository root.
 
 import XCTest
+import Foundation
 @testable import ArcaKit
 
 /// The real Rust core and its Wasm guest (libarca_ffi, linked in by `tools/ios/check-ios.sh`)

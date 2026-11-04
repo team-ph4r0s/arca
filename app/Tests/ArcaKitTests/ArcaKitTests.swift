@@ -106,7 +106,7 @@ final class ArcaKitTests: XCTestCase {
         XCTAssertEqual(report.inflated, 84200)
     }
 
-    func testPreviewItemsParsing() {
+    func testPreviewItemsParsing() throws {
         let jsonArray: [[String: Any]] = [
             [
                 "k": "p",
@@ -163,7 +163,7 @@ final class ArcaKitTests: XCTestCase {
             ]
         ]
 
-        let items = jsonArray.compactMap(PreviewItem.parse)
+        let items = try jsonArray.map { try PreviewItem.parse(from: $0) }
         XCTAssertEqual(items.count, 6)
 
         if case .paragraph(let para) = items[0] {
