@@ -7,6 +7,7 @@ import SwiftUI
 public struct DocumentViewer: View {
     public let report: Report
     public let meta: PreviewMeta
+    public let diagnostics: RunDiagnostics
     @EnvironmentObject private var state: AppState
 
     @State private var selectedSectionIndex: UInt32 = 0
@@ -16,9 +17,10 @@ public struct DocumentViewer: View {
     @State private var loadGeneration = UUID()
     @State private var activeExternalUrl: URL?
 
-    public init(report: Report, meta: PreviewMeta) {
+    public init(report: Report, meta: PreviewMeta, diagnostics: RunDiagnostics) {
         self.report = report
         self.meta = meta
+        self.diagnostics = diagnostics
     }
 
     public var body: some View {
@@ -203,6 +205,18 @@ public struct DocumentViewer: View {
             if run.style.contains(.underline) { str.underlineStyle = .single }
             if run.style.contains(.strike) { str.strikethroughStyle = .single }
             if run.style.contains(.mono) { str.inlinePresentationIntent?.insert(.code) }
+            if run.style.contains(.super) { str.baselineOffset = 5 }
+            if run.style.contains(.sub) { str.baselineOffset = -3 }
+            if let foreground = run.foregroundColor {
+                str.foregroundColor = color(from: foreground)
+            }
+            if let background = run.backgroundColor {
+                str.backgroundColor = color(from: background)
+            }
+            if let scale = run.fontScale {
+                let clamped = min(max(Double(scale), 50), 400) / 100.0
+                str.font = .system(size: 15 * clamped)
+            }
             if run.href != nil {
                 str.foregroundColor = state.theme.accent
                 str.underlineStyle = .single
@@ -210,6 +224,14 @@ public struct DocumentViewer: View {
             result.append(str)
         }
         return result
+    }
+
+    private func color(from packedRGB: UInt32) -> Color {
+        Color(
+            red: Double((packedRGB >> 16) & 0xff) / 255,
+            green: Double((packedRGB >> 8) & 0xff) / 255,
+            blue: Double(packedRGB & 0xff) / 255
+        )
     }
 
     // MARK: - Tables & Grids
@@ -349,21 +371,5 @@ public struct DocumentViewer: View {
         case 2: return .trailing
         default: return .leading
         }
-    }
-}
-
-private extension RunDiagnostics {
-    /// An empty record for the way back from the viewer to the report (there is no memberwise
-    /// initializer: the type decodes itself from the engine's JSON).
-    init(from dummy: Int) {
-        status = 0
-        statusName = "Ok"
-        message = ""
-        fuel = 0
-        fuelLimit = 0
-        peakMemory = 0
-        slices = 0
-        wallMs = 0
-        unlock = 0
     }
 }

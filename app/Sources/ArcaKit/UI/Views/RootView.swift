@@ -32,8 +32,8 @@ public struct RootView: View {
                     .environmentObject(state)
                     .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
 
-            case .viewer(let report, let meta):
-                DocumentViewer(report: report, meta: meta)
+            case .viewer(let report, let meta, let diagnostics):
+                DocumentViewer(report: report, meta: meta, diagnostics: diagnostics)
                     .environmentObject(state)
                     .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
 

@@ -210,10 +210,20 @@ public actor ArcaEngine {
             arca_outcome_preview_items(outcome, section, from, count, $0)
         }
 
-        guard let jsonArray = try JSONSerialization.jsonObject(with: itemsData) as? [[String: Any]] else {
-            return []
+        guard let rawItems = try JSONSerialization.jsonObject(with: itemsData) as? [Any] else {
+            throw PreviewItem.DecodingError.invalidField(kind: "root", field: "array")
         }
-        return jsonArray.compactMap(PreviewItem.parse)
+        return try rawItems.enumerated().map { index, raw in
+            guard let object = raw as? [String: Any] else {
+                throw PreviewItem.DecodingError.invalidField(kind: "item[\(index)]", field: "object")
+            }
+            do {
+                return try PreviewItem.parse(from: object)
+            } catch let error as PreviewItem.DecodingError {
+                throw PreviewItem.DecodingError.invalidField(
+                    kind: "item[\(index)]", field: error.localizedDescription)
+            }
+        }
     }
 
     // MARK: - One-Tap Sanitize

@@ -139,7 +139,7 @@ public struct XRayReportView: View {
             }
 
             Button {
-                state.proceedToViewer(report: report)
+                state.proceedToViewer(report: report, diagnostics: diagnostics)
             } label: {
                 HStack(spacing: 8) {
                     ArcaGlyph(.document, size: 18, color: .white)
@@ -313,7 +313,7 @@ public struct XRayReportView: View {
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundColor(state.theme.textSecondary)
 
-            Text("Песочница: \(diagnostics.wallMs) мс • Память: \(diagnostics.peakMemory >> 20) МиБ")
+            Text("Песочница: \(diagnostics.wallMs) мс • Топливо: \(diagnostics.fuel)/\(diagnostics.fuelLimit) • Память: \(diagnostics.peakMemory >> 20) МиБ")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(state.theme.textSecondary)
         }

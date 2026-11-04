@@ -88,6 +88,24 @@ final class ArcaEngineTests: XCTestCase {
         XCTAssertFalse(items.isEmpty)
     }
 
+    func testPreviewItemDecodesEngineRichRunJSON() throws {
+        let data = Data(#"[{"k":"p","s":"Heading1","a":3,"r":[["Title",1,"",16711680,255,175]]}]"#.utf8)
+        let raw = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+        guard case .paragraph(let paragraph) = try PreviewItem.parse(from: raw[0]) else {
+            return XCTFail("expected a paragraph")
+        }
+        XCTAssertEqual(paragraph.align, 3)
+        XCTAssertEqual(paragraph.runs.first?.foregroundColor, 0xff0000)
+        XCTAssertEqual(paragraph.runs.first?.backgroundColor, 0x0000ff)
+        XCTAssertEqual(paragraph.runs.first?.fontScale, 175)
+    }
+
+    func testPreviewItemRejectsUnknownKindInsteadOfDroppingIt() throws {
+        XCTAssertThrowsError(try PreviewItem.parse(from: ["k": "future-item"])) { error in
+            XCTAssertTrue(error.localizedDescription.contains("future-item"))
+        }
+    }
+
     @MainActor
     func testAppStateLoadsPreviewForItsOpenDocument() async throws {
         let state = AppState()

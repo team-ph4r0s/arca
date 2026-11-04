@@ -9,7 +9,7 @@ public enum AppScreen: Sendable, Equatable {
     case idle
     case scanning(fileName: String)
     case report(report: Report, diagnostics: RunDiagnostics)
-    case viewer(report: Report, meta: PreviewMeta)
+    case viewer(report: Report, meta: PreviewMeta, diagnostics: RunDiagnostics)
     case about
 }
 
@@ -125,12 +125,12 @@ public final class AppState: ObservableObject {
     }
 
     /// Transitions to the safe read-only preview viewer.
-    public func proceedToViewer(report: Report) {
+    public func proceedToViewer(report: Report, diagnostics: RunDiagnostics) {
         guard let session = activeDocument else { return }
         Task {
             do {
                 let meta = try await engine.previewMeta(document: session)
-                currentScreen = .viewer(report: report, meta: meta)
+                currentScreen = .viewer(report: report, meta: meta, diagnostics: diagnostics)
                 ArcaHaptics.selection()
             } catch let err as ArcaError {
                 handleError(err)
