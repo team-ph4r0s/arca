@@ -98,7 +98,8 @@ jobs:
           name: arca-ios-app
           path: |
             target/ios-app/Arca-simulator.app.zip
-            target/ios-app/Arca-unsigned.ipa
+            target/ios-app/arca-*.ipa
+            target/ios-app/arca-*.ipa.sha256
 
       # The whole xcodebuild logs and the test result bundle: what to read when a step above failed.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -124,6 +125,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name arca-ios-app --dir ios-build
+      - name: Download the XCFramework archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name ArcaCore.xcframework.zip --dir ios-framework
       - name: Attach builds once the Android release exists
         env:
           GH_TOKEN: ${{ github.token }}
@@ -132,7 +137,7 @@ jobs:
           for attempt in $(seq 1 180); do
             if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-                ios-build/Arca-unsigned.ipa ios-build/Arca-simulator.app.zip
+                ios-build/arca-*.ipa ios-build/arca-*.ipa.sha256 ios-framework/ArcaCore.xcframework.zip
               exit 0
             fi
             sleep 30

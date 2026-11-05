@@ -70,6 +70,11 @@ if [[ "$MODE" == "simulator" ]]; then
     (cd "$(dirname "$APP")" && zip -qry "$OUT/Arca-simulator.app.zip" Arca.app)
     echo "Built $OUT/Arca-simulator.app.zip"
 else
+    version="$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)"[[:space:]]*$/\1/p' app/project.yml | sed -n '1p')"
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+        echo "build-app: invalid MARKETING_VERSION in app/project.yml" >&2
+        exit 1
+    }
     run_xcodebuild app-device build \
         -project "$PROJECT" -scheme Arca -configuration Release \
         -sdk iphoneos -destination 'generic/platform=iOS' \
@@ -80,10 +85,15 @@ else
         echo "build-app: $APP was not produced" >&2
         exit 1
     fi
-    rm -rf "$OUT/ipa" "$OUT/Arca-unsigned.ipa"
+    ipa="$OUT/arca-${version}-ios.ipa"
+    rm -rf "$OUT/ipa" "$OUT/Arca-unsigned.ipa" "$ipa" "$ipa.sha256" "$OUT/Arca-unsigned.ipa.sha256"
     mkdir -p "$OUT/ipa/Payload"
     cp -R "$APP" "$OUT/ipa/Payload/"
-    (cd "$OUT/ipa" && zip -qry "$OUT/Arca-unsigned.ipa" Payload)
+    (cd "$OUT/ipa" && zip -qry "$ipa" Payload)
     rm -rf "$OUT/ipa"
-    echo "Built $OUT/Arca-unsigned.ipa"
+    sha256sum "$ipa" > "$ipa.sha256"
+    # Keep the stable compatibility name for local sideload documentation and older callers.
+    cp "$ipa" "$OUT/Arca-unsigned.ipa"
+    cp "$ipa.sha256" "$OUT/Arca-unsigned.ipa.sha256"
+    echo "Built $ipa"
 fi
