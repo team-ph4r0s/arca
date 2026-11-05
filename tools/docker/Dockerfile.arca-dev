@@ -1,0 +1,43 @@
+FROM rust:1.97.0-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    ANDROID_HOME=/opt/android-sdk \
+    NDK_HOME=/opt/android-sdk/ndk/27.2.12479018 \
+    ARCA_ANDROID_JARS=/opt/jars \
+    CARGO_TARGET_DIR=/tmp/arca-target \
+    CARGO_HOME=/root/.cargo
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      bash build-essential ca-certificates curl git zip unzip python3 \
+      openjdk-17-jdk-headless file jq libxml2-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG ANDROID_CMDLINE_TOOLS_VERSION=13114758
+RUN mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools" /opt/jars \
+ && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+      "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip" \
+      -o /tmp/cmdline-tools.zip \
+ && unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools" \
+ && mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest" \
+ && rm -f /tmp/cmdline-tools.zip \
+ && yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null \
+ && "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
+      "platform-tools" "platforms;android-26" "platforms;android-36" \
+      "build-tools;36.0.0" "ndk;27.2.12479018" \
+ && mkdir -p /opt/jars/android-26 /opt/jars/android-36 \
+ && ln -sf "$ANDROID_SDK_ROOT/platforms/android-26/android.jar" /opt/jars/android-26/android.jar \
+ && ln -sf "$ANDROID_SDK_ROOT/platforms/android-36/android.jar" /opt/jars/android-36/android.jar \
+ && ln -sf "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" /usr/local/bin/sdkmanager
+
+RUN rustup component add rustfmt clippy \
+ && rustup target add wasm32-unknown-unknown aarch64-linux-android armv7-linux-androideabi \
+      x86_64-linux-android x86_64-unknown-linux-gnu \
+ && for tool in cargo cargo-clippy cargo-fmt clippy-driver rustc rustdoc rustfmt rustup; do \
+      ln -sf "/usr/local/cargo/bin/$tool" "/usr/local/bin/$tool"; \
+    done
+
+ENV PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:/usr/local/cargo/bin:$PATH"
+WORKDIR /src
+CMD ["bash"]
