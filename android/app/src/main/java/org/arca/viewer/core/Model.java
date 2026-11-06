@@ -104,6 +104,31 @@ public final class Model {
         }
     }
 
+    /** A sentence in both languages. */
+    public static final class Bilingual {
+        public String ru = "";
+        public String en = "";
+
+        public String of(boolean russian) {
+            return russian ? ru : en;
+        }
+    }
+
+    /**
+     * What the "More" button shows: what the object is and what it can lead to, a static
+     * step-by-step trace (nothing is executed), the addresses and calls found. The fourth part,
+     * the source text, is the module's own.
+     */
+    public static final class Explain {
+        /** {@code Harmless}, {@code Suspicious} or {@code Hostile}. */
+        public String verdict = "Suspicious";
+        public Bilingual title = new Bilingual();
+        public Bilingual summary = new Bilingual();
+        public List<Bilingual> steps = new ArrayList<>();
+        /** Pairs of kind ({@code Url}, {@code Unc}, {@code Call}, {@code Other}) and value. */
+        public List<String[]> iocs = new ArrayList<>();
+    }
+
     /** A macro module (source is shown, never run). */
     public static final class MacroModule {
         public String language = "";
@@ -120,6 +145,8 @@ public final class Model {
         public List<String> procs = new ArrayList<>();
         /** What it does, the most serious first. */
         public List<Behavior> behaviors = new ArrayList<>();
+        /** The static explanation behind the "More" button; {@code null} if the engine gave none. */
+        public Explain explain;
 
         /** The worst intent first: Malicious, Suspicious, Benign (an unknown one counts as Suspicious). */
         public int intentRank() {
@@ -278,6 +305,7 @@ public final class Model {
                 b.detail = Json.str(bm, "detail");
                 x.behaviors.add(b);
             }
+            x.explain = parseExplain(Json.obj(m.get("explain")));
             r.macros.add(x);
         }
         for (Object o : Json.arr(root.get("refs"))) {
@@ -930,5 +958,31 @@ public final class Model {
     /** An unmodifiable list, never null. */
     public static <T> List<T> safe(List<T> list) {
         return list == null ? Collections.<T>emptyList() : Collections.unmodifiableList(list);
+    }
+
+    private static Bilingual bilingual(Map<String, Object> m) {
+        Bilingual b = new Bilingual();
+        b.ru = Json.str(m, "ru");
+        b.en = Json.str(m, "en");
+        return b;
+    }
+
+    /** The explanation of a macro, or {@code null} when the report carries none. */
+    private static Explain parseExplain(Map<String, Object> m) {
+        if (m == null || m.isEmpty()) {
+            return null;
+        }
+        Explain e = new Explain();
+        e.verdict = nonEmpty(Json.str(m, "verdict"), "Suspicious");
+        e.title = bilingual(Json.obj(m.get("title")));
+        e.summary = bilingual(Json.obj(m.get("summary")));
+        for (Object so : Json.arr(m.get("steps"))) {
+            e.steps.add(bilingual(Json.obj(so)));
+        }
+        for (Object io : Json.arr(m.get("iocs"))) {
+            Map<String, Object> im = Json.obj(io);
+            e.iocs.add(new String[] {Json.str(im, "kind"), Json.str(im, "value")});
+        }
+        return e;
     }
 }

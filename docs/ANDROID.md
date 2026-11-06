@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# Arca для Android (v0.7.1)
+# Arca для Android (v0.7.2)
 
 Приложение, которое открывает Word, Excel, PowerPoint, OpenDocument, RTF, PDF и письма
 Outlook так, как будто файл — враждебный: сначала «рентген безопасности», потом

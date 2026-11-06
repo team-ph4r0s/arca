@@ -58,6 +58,40 @@ public final class DocumentSession: Sendable {
     }
 }
 
+/// The outcome of one preview run, kept so that the viewer can cut slices of items from it.
+///
+/// Owns the native outcome handle and releases it when it goes away.
+public final class PreviewSession: @unchecked Sendable {
+    public let meta: PreviewMeta
+    /// What the sandbox spent on the preview run (fuel, peak memory, wall time).
+    public let diagnostics: RunDiagnostics
+    private let outcome: Int64
+
+    init(outcome: Int64, meta: PreviewMeta, diagnostics: RunDiagnostics) {
+        self.outcome = outcome
+        self.meta = meta
+        self.diagnostics = diagnostics
+    }
+
+    deinit {
+        arca_outcome_free(outcome)
+    }
+
+    /// A slice of the items of one section; an empty array past the end.
+    public func items(section: UInt32, from: UInt64, count: UInt32) throws -> [PreviewItem] {
+        var buf = ArcaBuffer(data: nil, len: 0)
+        let status = arca_outcome_preview_items(outcome, section, from, count, &buf)
+        defer { arca_buffer_free(buf) }
+        guard status == ArcaStatusCode.ok else {
+            throw ArcaError(code: status)
+        }
+        guard let ptr = buf.data, buf.len > 0 else {
+            return []
+        }
+        return try ArcaEngine.decodeItems(Data(bytes: ptr, count: buf.len))
+    }
+}
+
 /// The main entry point to the Arca Zero-Trust Document Engine.
 ///
 /// An actor that coordinates all interactions with the native Rust core,
@@ -196,7 +230,30 @@ public actor ArcaEngine {
         return try JSONDecoder().decode(PreviewMeta.self, from: metaData)
     }
 
-    /// Fetches a paginated page of preview items.
+    /// Runs the preview once and keeps its outcome, so that every slice of items the viewer asks
+    /// for afterwards is cut from the same run instead of starting the sandbox again.
+    public func openPreview(
+        document: DocumentSession,
+        password: String? = nil
+    ) async throws -> PreviewSession {
+        try applyPassword(password, to: document)
+        let outcome = try await runOperation(op: ARCA_OP_PREVIEW, flags: ArcaFlag.previewAll, document: document)
+        do {
+            let metaData = try fetchBufferData { arca_outcome_preview_meta(outcome, $0) }
+            let diagData = try fetchBufferData { arca_outcome_info(outcome, $0) }
+            let decoder = JSONDecoder()
+            return PreviewSession(
+                outcome: outcome,
+                meta: try decoder.decode(PreviewMeta.self, from: metaData),
+                diagnostics: try decoder.decode(RunDiagnostics.self, from: diagData))
+        } catch {
+            arca_outcome_free(outcome)
+            throw error
+        }
+    }
+
+    /// Fetches a paginated page of preview items (one preview run per call; the viewer uses
+    /// ``openPreview(document:password:)`` and ``PreviewSession/items(section:from:count:)``).
     public func previewItems(
         document: DocumentSession,
         section: UInt32,
@@ -209,7 +266,11 @@ public actor ArcaEngine {
         let itemsData = try fetchBufferData {
             arca_outcome_preview_items(outcome, section, from, count, $0)
         }
+        return try Self.decodeItems(itemsData)
+    }
 
+    /// Parses the JSON array of a slice of preview items.
+    nonisolated static func decodeItems(_ itemsData: Data) throws -> [PreviewItem] {
         guard let rawItems = try JSONSerialization.jsonObject(with: itemsData) as? [Any] else {
             throw PreviewItem.DecodingError.invalidField(kind: "root", field: "array")
         }
@@ -249,12 +310,22 @@ public actor ArcaEngine {
 
     /// Renders vector drawing primitives of a single page as JSON.
     public func renderPage(document: DocumentSession, pageNumber: UInt32) async throws -> String {
+        try await renderPageWithDiagnostics(document: document, pageNumber: pageNumber).json
+    }
+
+    /// Renders one page and returns, together with the drawing, what the sandbox spent on it.
+    public func renderPageWithDiagnostics(
+        document: DocumentSession,
+        pageNumber: UInt32
+    ) async throws -> (json: String, diagnostics: RunDiagnostics) {
         let flags = Int32(pageNumber & ArcaFlag.pageMask)
         let outcome = try await runOperation(op: ARCA_OP_RENDER, flags: flags, document: document)
         defer { arca_outcome_free(outcome) }
 
         let pageData = try fetchBufferData { arca_outcome_page(outcome, $0) }
-        return String(decoding: pageData, as: UTF8.self)
+        let diagData = try fetchBufferData { arca_outcome_info(outcome, $0) }
+        let diagnostics = try JSONDecoder().decode(RunDiagnostics.self, from: diagData)
+        return (String(decoding: pageData, as: UTF8.self), diagnostics)
     }
 
     // MARK: - Sandboxed Image Decoding

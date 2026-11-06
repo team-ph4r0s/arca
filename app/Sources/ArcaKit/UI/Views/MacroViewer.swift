@@ -47,8 +47,14 @@ public struct MacroViewer: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        // What the code is and does, in words
-                        intentSection
+                        // The "More" screen: what it is, the static trace, the indicators; the source
+                        // text is the fourth part, below. Without an explanation (an engine that does
+                        // not give one) the older reading of the intent is shown instead.
+                        if let explain = macro.explain {
+                            explanationSections(explain)
+                        } else {
+                            intentSection
+                        }
 
                         // Indicators / Badges
                         if !macro.autoExec.isEmpty || !macro.suspicious.isEmpty {
@@ -86,6 +92,81 @@ public struct MacroViewer: View {
                     .padding(20)
                 }
             }
+        }
+    }
+
+    private func verdictColor(_ verdict: String) -> Color {
+        switch verdict {
+        case "Harmless": return ArcaTheme.unverifiedSlate
+        case "Hostile": return ArcaTheme.activeRed
+        default: return ArcaTheme.trackerAmber
+        }
+    }
+
+    /// Parts 1-3 of the "More" screen. Nothing is executed to produce them: the engine read the text.
+    private func explanationSections(_ explain: MacroExplain) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // 1. What it is and what it can lead to.
+            VStack(alignment: .leading, spacing: 10) {
+                sectionTitle("ЧТО ЭТО И К ЧЕМУ МОЖЕТ ПРИВЕСТИ")
+                TagChip(text: explain.title.localized, color: verdictColor(explain.verdict))
+                Text(explain.summary.localized)
+                    .font(.system(size: 14))
+                    .foregroundColor(state.theme.textPrimary)
+                Text(MacroBehaviorText.safeHere)
+                    .font(.system(size: 12))
+                    .foregroundColor(state.theme.textSecondary)
+            }
+            .card(state.theme)
+
+            // 2. The static trace.
+            VStack(alignment: .leading, spacing: 8) {
+                sectionTitle("ПОШАГОВЫЙ РАЗБОР (БЕЗ ЗАПУСКА)")
+                ForEach(Array(explain.steps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(index + 1).")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(state.theme.accent)
+                        Text(step.localized)
+                            .font(.system(size: 13))
+                            .foregroundColor(state.theme.textPrimary)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            .card(state.theme)
+
+            // 3. Addresses, paths and calls.
+            if !explain.iocs.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    sectionTitle("АДРЕСА, ПУТИ И ВЫЗОВЫ")
+                    ForEach(explain.iocs) { ioc in
+                        HStack(alignment: .top, spacing: 8) {
+                            TagChip(text: iocLabel(ioc.kind), color: verdictColor(explain.verdict))
+                            Text(ioc.value)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(state.theme.textPrimary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                .card(state.theme)
+            }
+        }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(state.theme.textSecondary)
+    }
+
+    private func iocLabel(_ kind: String) -> String {
+        switch kind {
+        case "Url": return "URL"
+        case "Unc": return "UNC"
+        case "Call": return "API"
+        default: return "IOC"
         }
     }
 
@@ -231,5 +312,16 @@ private struct FlowLayout: Layout {
             maxHeight = max(maxHeight, size.height)
             currentX += size.width + spacing
         }
+    }
+}
+
+private extension View {
+    /// The rounded surface the sections of the "More" screen sit on.
+    func card(_ theme: ArcaTheme) -> some View {
+        self
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

@@ -117,3 +117,121 @@ fn statistics_and_reminder_rules_work_without_a_guest() {
     assert_eq!(reminder_item_count(), 30);
     assert_eq!(reminder_pick(31), 1);
 }
+
+// ---- the whole path the iOS app takes, over real fixtures and the real guest ----------------
+//
+// These need the guest embedded at build time (`ARCA_GUEST_WASM`); CI sets it together with
+// `ARCA_REQUIRE_E2E=1`, and without it they say so and return.
+
+fn ready() -> bool {
+    if !has_guest() {
+        assert!(
+            std::env::var_os("ARCA_REQUIRE_E2E").is_none_or(|v| v.is_empty() || v == "0"),
+            "ARCA_REQUIRE_E2E is set but the library was built without ARCA_GUEST_WASM"
+        );
+        #[allow(clippy::print_stderr)] // a skipped test says so
+        {
+            eprintln!("skipped: built without ARCA_GUEST_WASM");
+        }
+        return false;
+    }
+    assert_eq!(init(0, 0, 0, 0), 0);
+    true
+}
+
+fn json(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes).expect("utf-8")
+}
+
+/// The numbers of `outcome_info`: the sandbox must report real, non-zero resource use.
+fn assert_real_metrics(outcome: i64, what: &str) {
+    let info = json(outcome_info(outcome).expect("outcome info"));
+    let num = |key: &str| -> u64 {
+        let tail = info
+            .split(&format!("\"{key}\":"))
+            .nth(1)
+            .unwrap_or_else(|| panic!("{what}: no {key} in {info}"));
+        let digits: String = tail.chars().take_while(char::is_ascii_digit).collect();
+        digits.parse().unwrap_or_else(|_| panic!("{what}: bad {key} in {info}"))
+    };
+    assert!(num("fuel") > 0, "{what}: fuel is zero: {info}");
+    assert!(num("peakMemory") > 0, "{what}: peak memory is zero: {info}");
+    assert!(num("fuelLimit") >= num("fuel"), "{what}: {info}");
+}
+
+/// Opens the bytes the way `arca_doc_append` does, runs `op` and returns the outcome handle.
+fn run_op(bytes: &[u8], op: i32, flags: i32) -> (i64, i64) {
+    let doc = doc_new(64 << 20);
+    assert!(doc > 0, "{doc}");
+    assert_eq!(doc_append(doc, bytes), 0);
+    let job = job_new();
+    assert!(job > 0);
+    let outcome = run(job, doc, op, flags);
+    job_free(job);
+    assert!(outcome > 0, "op {op} returned {outcome}");
+    assert_eq!(outcome_status(outcome), 0, "op {op}");
+    (doc, outcome)
+}
+
+#[test]
+fn preview_slices_carry_real_content_for_every_family() {
+    if !ready() {
+        return;
+    }
+    let fixtures: [(&str, &[u8], &str); 5] = [
+        ("report.docx", include_bytes!("../../../tests/fixtures/report.docx"), "\"k\":\"p\""),
+        ("report.odt", include_bytes!("../../../tests/fixtures/report.odt"), "\"k\":\"p\""),
+        ("slides.pptx", include_bytes!("../../../tests/fixtures/slides.pptx"), "\"k\":\"p\""),
+        ("sheet.xlsx", include_bytes!("../../../tests/fixtures/sheet.xlsx"), "\"k\":\"g"),
+        ("report.pdf", include_bytes!("../../../tests/fixtures/report.pdf"), "\"k\":\""),
+    ];
+    for (name, bytes, marker) in fixtures {
+        // arca.h: ARCA_OP_PREVIEW = 3, ARCA_FLAG_REVEAL_HIDDEN = 1.
+        let (doc, outcome) = run_op(bytes, 3, 1);
+        assert_real_metrics(outcome, name);
+        let meta = json(preview_meta(outcome).expect("meta"));
+        assert!(meta.contains("\"sections\""), "{name}: {meta}");
+        assert!(!meta.contains("\"sections\":[]"), "{name}: no sections: {meta}");
+        assert!(
+            !meta.contains("\"items\":0,") || meta.matches("\"items\":").count() > 1,
+            "{name}: {meta}"
+        );
+
+        // Slice the first section the way the app does: 64 at a time, until it is exhausted.
+        let first = json(preview_items(outcome, 0, 0, 64).expect("first slice"));
+        assert!(first.starts_with('[') && first != "[]", "{name}: empty first slice: {first}");
+        assert!(first.contains(marker), "{name}: no {marker} item in {first}");
+        let again = json(preview_items(outcome, 0, 0, 64).expect("same slice"));
+        assert_eq!(first, again, "{name}: a slice must not depend on how often it is asked for");
+        // Past the end is an empty array, never an error.
+        let beyond = json(preview_items(outcome, 0, 1 << 40, 64).expect("beyond the end"));
+        assert_eq!(beyond, "[]", "{name}");
+        outcome_free(outcome);
+        doc_free(doc);
+    }
+}
+
+#[test]
+fn scan_render_and_image_report_real_metrics() {
+    if !ready() {
+        return;
+    }
+    let pdf: &[u8] = include_bytes!("../../../tests/fixtures/report.pdf");
+    let (doc, scan) = run_op(pdf, 1, 0);
+    assert_real_metrics(scan, "scan");
+    assert!(json(report(scan).expect("report")).contains("\"verdict\""));
+    outcome_free(scan);
+
+    // arca.h: ARCA_OP_RENDER = 4, the flags carry the page number.
+    let job = job_new();
+    let render = run(job, doc, 4, 0);
+    job_free(job);
+    assert!(render > 0, "{render}");
+    assert_eq!(outcome_status(render), 0);
+    assert_real_metrics(render, "render");
+    let drawing = json(page(render).expect("page"));
+    assert!(drawing.contains("\"p\":[[") && drawing.contains("\"w\":"), "{drawing}");
+    assert!(drawing.contains("\"h\":"), "{drawing}");
+    outcome_free(render);
+    doc_free(doc);
+}

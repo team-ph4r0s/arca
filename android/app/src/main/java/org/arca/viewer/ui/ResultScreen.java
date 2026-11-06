@@ -8,6 +8,7 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -625,6 +626,75 @@ public final class ResultScreen extends Screen {
         card.addView(ui.text(R.string.macro_reading_note, Ui.CAPTION));
     }
 
+    /** The reader's language is Russian (the explanation is written in Russian and English). */
+    private boolean russian() {
+        return "ru".equals(act.getResources().getConfiguration().getLocales().get(0).getLanguage());
+    }
+
+    /**
+     * The "More" button of a macro: what it is and what it can lead to, the static step-by-step
+     * trace, the addresses and calls, and (below, in the card) the source as plain text. The engine
+     * wrote all of it from the text of the macro; nothing was run to produce it.
+     */
+    private void addExplain(LinearLayout card, final Model.MacroModule m) {
+        final Model.Explain e = m.explain;
+        if (e == null) {
+            return;
+        }
+        final boolean ru = russian();
+        final LinearLayout body = ui.vbox();
+        body.setVisibility(View.GONE);
+        body.addView(ui.space(8));
+        body.addView(ui.text(R.string.explain_part1, Ui.LABEL));
+        body.addView(ui.pill(Fmt.clip(Fmt.safe(e.title.of(ru)), 120), intentColorOf(e.verdict), intentContainerOf(e.verdict)));
+        body.addView(ui.space(6));
+        TextView summary = ui.text(Fmt.clip(Fmt.safe(e.summary.of(ru)), 600), Ui.BODY);
+        summary.setTextIsSelectable(true);
+        body.addView(summary);
+        body.addView(ui.space(10));
+        body.addView(ui.text(R.string.explain_part2, Ui.LABEL));
+        int n = 0;
+        for (Model.Bilingual step : e.steps) {
+            n++;
+            TextView t = ui.text(n + ". " + Fmt.clip(Fmt.safe(step.of(ru)), 400), Ui.SMALL);
+            t.setTextIsSelectable(true);
+            body.addView(t);
+        }
+        if (!e.iocs.isEmpty()) {
+            body.addView(ui.space(10));
+            body.addView(ui.text(R.string.explain_part3, Ui.LABEL));
+            for (String[] ioc : e.iocs) {
+                TextView t = ui.text(Fmt.clip(Fmt.safe(ioc[0] + ": " + ioc[1]), 300), Ui.MONO);
+                t.setTextIsSelectable(true);
+                body.addView(t);
+            }
+        }
+        body.addView(ui.space(10));
+        body.addView(ui.text(R.string.explain_part4, Ui.LABEL));
+        card.addView(ui.space(8));
+        final Button[] toggle = new Button[1];
+        toggle[0] = ui.button(R.string.explain_more, Ui.TONAL, 0, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean show = body.getVisibility() != View.VISIBLE;
+                body.setVisibility(show ? View.VISIBLE : View.GONE);
+                toggle[0].setText(show ? R.string.explain_less : R.string.explain_more);
+            }
+        });
+        card.addView(toggle[0]);
+        card.addView(body);
+    }
+
+    private static int intentColorOf(String verdict) {
+        return "Hostile".equals(verdict) ? R.color.arca_danger
+            : "Harmless".equals(verdict) ? R.color.arca_unknown : R.color.arca_warn;
+    }
+
+    private static int intentContainerOf(String verdict) {
+        return "Hostile".equals(verdict) ? R.color.arca_danger_container
+            : "Harmless".equals(verdict) ? R.color.arca_unknown_container : R.color.arca_warn_container;
+    }
+
     private static String joinNames(List<String> names) {
         StringBuilder sb = new StringBuilder();
         for (String n : names) {
@@ -661,6 +731,7 @@ public final class ResultScreen extends Screen {
         card.addView(ui.text(Fmt.clip(Fmt.safe(m.name.isEmpty() ? "(unnamed)" : m.name), 120), Ui.TITLE));
         card.addView(ui.text(Labels.macroLang(act, m.language) + " · " + Fmt.clip(Fmt.safe(m.location), 160), Ui.CAPTION));
         addIntent(card, m);
+        addExplain(card, m);
         if (!m.autoExec.isEmpty()) {
             card.addView(ui.space(8));
             card.addView(ui.text(R.string.macro_autoexec, Ui.LABEL));

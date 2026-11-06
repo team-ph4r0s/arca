@@ -16,6 +16,15 @@ public struct DocumentViewer: View {
     @State private var loadedCount: UInt64 = 0
     @State private var loadGeneration = UUID()
     @State private var activeExternalUrl: URL?
+    @State private var mode: ViewMode = .reading
+
+    /// How the document is shown: as flowing text, as drawn pages, or as tables only.
+    enum ViewMode: String, CaseIterable, Identifiable {
+        case reading = "Чтение"
+        case pages = "Страницами"
+        case tables = "Таблицы"
+        var id: String { rawValue }
+    }
 
     public init(report: Report, meta: PreviewMeta, diagnostics: RunDiagnostics) {
         self.report = report
@@ -31,35 +40,20 @@ public struct DocumentViewer: View {
                 // Top Navigation Bar
                 headerBar
 
-                // Section / Tab Switcher (if multi-sheet / multi-slide)
-                if meta.sections.count > 1 {
-                    sectionTabs
-                }
+                modePicker
 
-                // Document Content ScrollView
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                            renderItem(item)
-                                .onAppear {
-                                    if index == max(0, items.count - 10) {
-                                        loadMoreItems()
-                                    }
-                                }
-                        }
-
-                        if isLoadingItems {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                    .padding(.vertical, 20)
-                                Spacer()
-                            }
-                        }
+                if mode == .pages {
+                    // Vector drawing of the pages from the sandboxed renderer.
+                    PageCanvasView()
+                } else {
+                    // Section / Tab Switcher (if multi-sheet / multi-slide)
+                    if meta.sections.count > 1 {
+                        sectionTabs
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    textContent
                 }
+
+                SandboxMetricsBar()
             }
         }
         .onAppear {
@@ -87,7 +81,7 @@ public struct DocumentViewer: View {
             Button {
                 state.currentScreen = .report(
                     report: report,
-                    diagnostics: RunDiagnostics(from: 0)
+                    diagnostics: diagnostics
                 )
                 ArcaHaptics.selection()
             } label: {
@@ -113,6 +107,62 @@ public struct DocumentViewer: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(state.theme.surface)
+    }
+
+    // MARK: - Mode Picker and Text Content
+
+    private var modePicker: some View {
+        Picker("Режим", selection: $mode) {
+            ForEach(ViewMode.allCases) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(state.theme.surface)
+        .onChange(of: mode) { _ in ArcaHaptics.selection() }
+    }
+
+    /// The items to show: in "Tables" mode only the table and grid rows.
+    private var visibleItems: [PreviewItem] {
+        guard mode == .tables else { return items }
+        return items.filter {
+            switch $0 {
+            case .tableRow, .gridHeader, .gridRow: return true
+            default: return false
+            }
+        }
+    }
+
+    private var textContent: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+                if mode == .tables, visibleItems.isEmpty, !isLoadingItems {
+                    Text("В этом разделе нет таблиц.")
+                        .font(.system(size: 13))
+                        .foregroundColor(state.theme.textSecondary)
+                        .padding(.vertical, 24)
+                }
+                ForEach(Array(visibleItems.enumerated()), id: \.offset) { index, item in
+                    renderItem(item)
+                        .onAppear {
+                            if index == max(0, visibleItems.count - 10) {
+                                loadMoreItems()
+                            }
+                        }
+                }
+
+                if isLoadingItems {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 20)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
     }
 
     // MARK: - Section Tabs
@@ -371,5 +421,42 @@ public struct DocumentViewer: View {
         case 2: return .trailing
         default: return .leading
         }
+    }
+}
+
+/// The bar at the bottom of the viewer: what the sandbox spent on the latest run (scan, preview
+/// or page render). The figures come from the engine's own diagnostics, never from a placeholder.
+struct SandboxMetricsBar: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ArcaGlyph(.lock, size: 11, color: state.theme.accent)
+            Text(summary)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(state.theme.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(state.theme.surface)
+    }
+
+    private var summary: String {
+        guard let run = state.lastRun else { return "Песочница: ожидание" }
+        let d = run.diagnostics
+        let what: String
+        switch run.kind {
+        case .scan: what = "рентген"
+        case .preview: what = "просмотр"
+        case .render: what = "страница"
+        }
+        return "Песочница · \(what): \(d.wallMs) мс • топливо \(d.fuel)/\(d.fuelLimit) • память \(Self.memory(d.peakMemory))"
+    }
+
+    private static func memory(_ bytes: Int64) -> String {
+        bytes >= 1 << 20 ? "\(bytes >> 20) МиБ" : "\(bytes >> 10) КиБ"
     }
 }
