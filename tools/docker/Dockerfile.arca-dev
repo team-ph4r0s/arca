@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Additional terms under AGPLv3 section 7: see LICENSE_ADDITIONAL_TERMS.md in the repository root.
+#
+# arca-dev: the one container in which Arca's Rust workspace, the Wasm guest and the Android
+# native libraries are built and tested on a developer machine (Windows/macOS/Linux with Docker).
+#
+#   docker build -t arca-dev -f tools/docker/Dockerfile.arca-dev tools/docker
+#   tools/docker/run-arca-dev.sh            # starts the persistent container `arca-dev`
+#   docker exec arca-dev bash -c "cargo test --workspace --locked -q"
+#
+# CARGO_HOME and CARGO_TARGET_DIR live on the container's own (Linux) file system, never on the
+# bind-mounted repository: building through a Windows mount is about twenty times slower.
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG RUST_VERSION=1.97.0
+ARG NDK_VERSION=27.2.12479018
+ARG CMDLINE_TOOLS=11076708
+
+RUN apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends \
+        build-essential pkg-config curl git zip unzip python3 ca-certificates \
+        openjdk-17-jdk-headless shellcheck jq file xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/root/.rustup \
+    CARGO_HOME=/root/.cargo \
+    CARGO_TARGET_DIR=/tmp/arca-target \
+    CARGO_INCREMENTAL=0 \
+    PATH=/root/.cargo/bin:/root/android-sdk/cmdline-tools/latest/bin:/root/android-sdk/platform-tools:$PATH
+
+# Rust: the version pinned by rust-toolchain.toml, with rustfmt/clippy and every target the
+# workspace is built for (Wasm guest, three Android ABIs, host, and the two iOS targets that
+# rust-toolchain.toml lists so that rustup never has to download anything at run time).
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --no-modify-path --default-toolchain "${RUST_VERSION}" --profile minimal \
+ && rustup component add rustfmt clippy \
+ && rustup target add \
+        wasm32-unknown-unknown \
+        aarch64-linux-android armv7-linux-androideabi x86_64-linux-android \
+        x86_64-unknown-linux-gnu \
+        aarch64-apple-ios aarch64-apple-ios-sim
+
+# Android SDK + NDK (platforms 36 and 26, build-tools 36.0.0, NDK for the cross-linkers).
+ENV ANDROID_HOME=/root/android-sdk ANDROID_SDK_ROOT=/root/android-sdk
+RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
+ && curl -fsSL -o /tmp/cmdline-tools.zip \
+        "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS}_latest.zip" \
+ && unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
+ && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
+ && rm /tmp/cmdline-tools.zip \
+ && yes | sdkmanager --licenses >/dev/null \
+ && sdkmanager --install \
+        "cmdline-tools;latest" "platform-tools" \
+        "platforms;android-36" "platforms;android-26" \
+        "build-tools;36.0.0" "ndk;${NDK_VERSION}" >/dev/null
+
+ENV ARCA_NDK=/root/android-sdk/ndk/${NDK_VERSION}
+
+WORKDIR /work
+CMD ["sleep", "infinity"]
