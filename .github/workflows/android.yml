@@ -276,7 +276,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: GitHub release (pre-release)
+    name: GitHub release (latest)
     if: startsWith(github.ref, 'refs/tags/v')
     needs: package-release
     runs-on: ubuntu-24.04
@@ -355,7 +355,7 @@ jobs:
             echo '```'
           } > "$body"
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "Arca ${tag#v}" \
-            --notes-file "$body" --prerelease --verify-tag \
+            --notes-file "$body" --latest --verify-tag \
             dist/arca-*.apk dist/arca-*.apk.sha256 dist/arca-*.unsigned.sha256 dist/arca-*.verify.txt dist/native.SHA256SUMS
 
   emulators:
