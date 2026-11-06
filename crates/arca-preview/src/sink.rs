@@ -1181,6 +1181,8 @@ mod tests {
             rows: vec![Row {
                 cells: vec![crate::model::Cell {
                     span: 0,
+                    fill: 0,
+                    vmerge: 0,
                     header: false,
                     paras: vec![Paragraph::plain("t\u{E0001}")],
                 }],

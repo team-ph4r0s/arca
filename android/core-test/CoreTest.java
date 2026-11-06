@@ -332,6 +332,15 @@ public final class CoreTest {
         eq("http://evil.example.test/pay", explained.iocs.get(0)[1], "indicator value");
         check(x.macros.get(1).explain == null, "no explanation without the field");
 
+        // Table cells: fill (0xAARRGGBB, wider than an int's positive range) and vertical merge.
+        Model.Cell plainCell = new Model.Cell();
+        eq(0, plainCell.fill, "a cell has no fill by default");
+        eq(0, plainCell.vmerge, "a cell is not merged by default");
+        java.util.Map<String, Object> cellJson =
+            Json.obj(Json.parse("{\"f\":4292734719,\"v\":2}".getBytes(StandardCharsets.UTF_8)));
+        eq(0xFFDDEEFF, (int) Json.num(cellJson, "f"), "a 32-bit fill survives the JSON number");
+        eq(2, Json.integer(cellJson, "v"), "the vertical merge marker");
+
         // Tolerant parsing: an empty object still gives a (non-clean) report.
         Model.Report e = Model.parseReport("{}".getBytes(StandardCharsets.UTF_8));
         eq(Model.Verdict.UNVERIFIED, e.verdict, "a missing verdict is never 'clean'");

@@ -1157,7 +1157,7 @@ impl Handler for Walker<'_, '_> {
             "tc" => {
                 if let Some(t) = self.tables.last_mut() {
                     t.span = 1;
-                    t.cell = Some(Cell { span: 1, header: t.header_row, paras: Vec::new() });
+                    t.cell = Some(Cell { span: 1, header: t.header_row, ..Cell::default() });
                 }
             }
             "gridSpan" => {
@@ -1165,6 +1165,23 @@ impl Handler for Walker<'_, '_> {
                     && let Some(c) = t.cell.as_mut()
                 {
                     c.span = tag.attr("val").and_then(|v| v.parse().ok()).unwrap_or(1);
+                }
+            }
+            // `w:vMerge w:val="restart"` starts a vertical merge, a bare `w:vMerge` continues it.
+            "vMerge" => {
+                if let Some(t) = self.tables.last_mut()
+                    && let Some(c) = t.cell.as_mut()
+                {
+                    c.vmerge = if tag.attr("val").as_deref() == Some("restart") { 1 } else { 2 };
+                }
+            }
+            // The fill of the cell itself (a `w:shd` in `w:tcPr`; in a run or paragraph it is
+            // handled above).
+            "shd" if !self.in_rpr && !self.in_ppr => {
+                if let Some(t) = self.tables.last_mut()
+                    && let Some(c) = t.cell.as_mut()
+                {
+                    c.fill = tag.attr("fill").map_or(0, |v| rgb(&v));
                 }
             }
             "txbxContent" => {
@@ -1897,6 +1914,22 @@ mod docx_tests {
                 ("•".to_owned(), 1, "f".to_owned()),
             ]
         );
+    }
+
+    #[test]
+    fn cells_carry_their_fill_and_vertical_merge() {
+        let p = ok(&docx(
+            r#"<w:tbl><w:tblGrid><w:gridCol/></w:tblGrid>
+            <w:tr><w:tc><w:tcPr><w:vMerge w:val="restart"/><w:shd w:val="clear" w:fill="DDEEFF"/></w:tcPr><w:p><w:r><w:t>top</w:t></w:r></w:p></w:tc>
+                  <w:tc><w:p><w:r><w:rPr><w:shd w:val="clear" w:fill="FFFF00"/></w:rPr><w:t>run</w:t></w:r></w:p></w:tc></w:tr>
+            <w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>
+                  <w:tc><w:p><w:r><w:t>plain</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#,
+        ));
+        let Some(Block::Table(t)) = body(&p).blocks.first() else { panic!("no table") };
+        let cells: Vec<(u32, u8)> =
+            t.rows.iter().flat_map(|r| r.cells.iter().map(|c| (c.fill, c.vmerge))).collect();
+        // The run's own shading does not colour its cell.
+        assert_eq!(cells, [(0xFFDD_EEFF, 1), (0, 0), (0, 2), (0, 0)]);
     }
 
     #[test]

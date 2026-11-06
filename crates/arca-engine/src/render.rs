@@ -754,6 +754,13 @@ fn table_row(w: &mut JsonWriter, row: &Row, columns: usize, first: bool, last: b
         w.begin_object();
         w.field_u64("c", u64::from(cell.span.max(1)));
         w.field_bool("h", cell.header);
+        // Fill (0xAARRGGBB) and vertical merge (1 first, 2 covered), written only when present.
+        if cell.fill >> 24 != 0 {
+            w.field_u64("f", u64::from(cell.fill));
+        }
+        if cell.vmerge != 0 {
+            w.field_u64("v", u64::from(cell.vmerge));
+        }
         w.key("p");
         w.begin_array();
         for p in &cell.paras {

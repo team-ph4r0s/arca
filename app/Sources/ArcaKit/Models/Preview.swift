@@ -89,11 +89,20 @@ public struct TableCell: Sendable, Hashable {
     public let isHeader: Bool
     /// Paragraphs inside the cell.
     public let paragraphs: [Paragraph]
+    /// Fill colour of the cell as `0xAARRGGBB`; an alpha of 0 means none.
+    public let fill: UInt32
+    /// Vertical merge: 0 none, 1 the first cell of a merged column, 2 a cell covered by the one above.
+    public let verticalMerge: Int
 
-    public init(span: Int = 1, isHeader: Bool = false, paragraphs: [Paragraph] = []) {
+    public init(
+        span: Int = 1, isHeader: Bool = false, paragraphs: [Paragraph] = [],
+        fill: UInt32 = 0, verticalMerge: Int = 0
+    ) {
         self.span = span
         self.isHeader = isHeader
         self.paragraphs = paragraphs
+        self.fill = fill
+        self.verticalMerge = verticalMerge
     }
 }
 
@@ -234,7 +243,11 @@ extension PreviewItem {
                         paras.append(try parseParagraph(paragraph, kind: "tr.cell"))
                     }
                 }
-                cells.append(TableCell(span: span, isHeader: h, paragraphs: paras))
+                // Fill and vertical merge are written only when present (an older engine omits them).
+                let fill = UInt32(truncatingIfNeeded: (c["f"] as? NSNumber)?.uint64Value ?? 0)
+                let vmerge = (c["v"] as? NSNumber)?.intValue ?? 0
+                cells.append(
+                    TableCell(span: span, isHeader: h, paragraphs: paras, fill: fill, verticalMerge: vmerge))
             }
             return .tableRow(TableRow(columns: n, isFirst: first, isLast: last, cells: cells))
         case "gh":

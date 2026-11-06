@@ -67,3 +67,21 @@ final class PageDrawingTests: XCTestCase {
         XCTAssertEqual([d.fuel, d.fuelLimit, d.peakMemory, d.wallMs], [1_234, 9_999, 4 << 20, 17])
     }
 }
+
+final class TableCellTests: XCTestCase {
+    func testAFillAndAVerticalMergeAreParsedFromTheRowJSON() throws {
+        let row: [String: Any] = [
+            "k": "tr", "n": 2, "first": true, "last": false,
+            "cells": [
+                ["c": 1, "h": false, "f": NSNumber(value: 4_292_734_719 as UInt64), "v": 1, "p": []],
+                ["c": 1, "h": false, "v": 2, "p": []],
+                ["c": 1, "h": false, "p": []],
+            ],
+        ]
+        guard case .tableRow(let parsed) = try PreviewItem.parse(from: row) else {
+            return XCTFail("a table row")
+        }
+        XCTAssertEqual(parsed.cells.map(\.fill), [0xFFDD_EEFF, 0, 0])
+        XCTAssertEqual(parsed.cells.map(\.verticalMerge), [1, 2, 0])
+    }
+}

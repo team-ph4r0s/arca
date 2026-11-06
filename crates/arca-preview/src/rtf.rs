@@ -1140,7 +1140,7 @@ impl<'a, 's, 'p> Parser<'a, 's, 'p> {
         }
         let paras = std::mem::take(&mut self.cell_paras);
         if self.row_cells.len() < 4_096 {
-            self.row_cells.push(Cell { span: 1, header: false, paras });
+            self.row_cells.push(Cell { span: 1, header: false, paras, ..Cell::default() });
         }
     }
 
@@ -1151,7 +1151,7 @@ impl<'a, 's, 'p> Parser<'a, 's, 'p> {
         }
         if !self.cell_paras.is_empty() {
             let paras = std::mem::take(&mut self.cell_paras);
-            self.row_cells.push(Cell { span: 1, header: false, paras });
+            self.row_cells.push(Cell { span: 1, header: false, paras, ..Cell::default() });
         }
         let cells = std::mem::take(&mut self.row_cells);
         if !cells.is_empty() {

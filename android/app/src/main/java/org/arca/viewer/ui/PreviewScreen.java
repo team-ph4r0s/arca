@@ -1733,6 +1733,10 @@ public final class PreviewScreen extends Screen {
         for (Model.Cell cell : row.cells) {
             LinearLayout box = ui.vbox();
             int fill = cell.header ? ui.color(R.color.arca_surface_variant) : ui.color(R.color.arca_surface);
+            // The fill the document gave this cell (an opaque colour), under the app's own text colour.
+            if ((cell.fill >>> 24) != 0) {
+                fill = cell.fill | 0xFF000000;
+            }
             box.setBackground(ui.rounded(fill, ui.color(R.color.arca_outline), 0));
             box.setPadding(ui.dp(8), ui.dp(6), ui.dp(8), ui.dp(6));
             if (cell.paras.isEmpty()) {
@@ -1745,6 +1749,14 @@ public final class PreviewScreen extends Screen {
                 styleParagraph(t, p);
                 t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14 * scale);
                 t.setPadding(0, ui.dp(2), 0, ui.dp(2));
+                if ((cell.fill >>> 24) != 0) {
+                    // Text stays readable on whatever colour the document chose, in either theme.
+                    int r = (cell.fill >> 16) & 0xFF;
+                    int g = (cell.fill >> 8) & 0xFF;
+                    int b = cell.fill & 0xFF;
+                    boolean light = (299 * r + 587 * g + 114 * b) / 1000 > 140;
+                    t.setTextColor(light ? 0xFF1B1B1B : 0xFFF2F2F2);
+                }
                 if (cell.header) {
                     t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
                 }

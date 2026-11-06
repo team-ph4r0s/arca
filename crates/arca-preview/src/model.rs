@@ -286,8 +286,13 @@ pub struct Cell {
     pub header: bool,
     /// Content.
     pub paras: Vec<Paragraph>,
+    /// Fill colour of the cell as `0xAARRGGBB` (alpha `0`: none).
+    pub fill: u32,
+    /// Vertical merge: `0` none, `1` the first cell of a merged column of cells, `2` a cell
+    /// covered by the one above it (it holds no text of its own).
+    pub vmerge: u8,
 }
-wire_struct!(Cell { span, header, paras });
+wire_struct!(Cell { span, header, paras, fill, vmerge });
 
 /// A table row.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -657,7 +662,12 @@ mod tests {
                     Block::Para(para.clone()),
                     Block::Table(Table {
                         rows: vec![Row {
-                            cells: vec![Cell { span: 2, header: true, paras: vec![para] }],
+                            cells: vec![Cell {
+                                span: 2,
+                                header: true,
+                                paras: vec![para],
+                                ..Cell::default()
+                            }],
                         }],
                     }),
                     Block::Grid(Grid {

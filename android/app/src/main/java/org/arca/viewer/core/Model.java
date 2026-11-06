@@ -475,6 +475,10 @@ public final class Model {
     public static final class Cell {
         public int span = 1;
         public boolean header;
+        /** Fill colour as {@code 0xAARRGGBB}; alpha 0 means none. */
+        public int fill;
+        /** Vertical merge: 0 none, 1 the first cell of a merged column, 2 a cell covered by the one above. */
+        public int vmerge;
         public List<Para> paras = new ArrayList<>();
     }
 
@@ -632,6 +636,8 @@ public final class Model {
                         Cell c = new Cell();
                         c.span = Math.max(1, Json.integer(cm, "c"));
                         c.header = Json.bool(cm, "h");
+                        c.fill = (int) Json.num(cm, "f");
+                        c.vmerge = Json.integer(cm, "v");
                         for (Object po : Json.arr(cm.get("p"))) {
                             c.paras.add(para(Json.obj(po)));
                         }

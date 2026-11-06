@@ -986,9 +986,10 @@ fn table_of(
                         span: u16::try_from(span).unwrap_or(1),
                         header: false,
                         paras,
+                        ..Cell::default()
                     });
                 }
-                None => row.cells.push(Cell { span: 1, header: false, paras: Vec::new() }),
+                None => row.cells.push(Cell { span: 1, header: false, ..Cell::default() }),
             }
         }
         table.rows.push(row);

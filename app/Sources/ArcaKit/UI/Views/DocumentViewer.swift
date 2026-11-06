@@ -228,7 +228,7 @@ public struct DocumentViewer: View {
 
     // MARK: - Paragraphs
 
-    private func renderParagraph(_ para: Paragraph) -> some View {
+    private func renderParagraph(_ para: Paragraph, textColor: Color? = nil) -> some View {
         HStack(alignment: .top, spacing: 6) {
             if !para.marker.isEmpty {
                 Text(para.marker)
@@ -239,7 +239,7 @@ public struct DocumentViewer: View {
 
             Text(buildAttributedString(para))
                 .font(fontForStyle(para.style))
-                .foregroundColor(state.theme.textPrimary)
+                .foregroundColor(textColor ?? state.theme.textPrimary)
                 .multilineTextAlignment(alignmentForAlign(para.align))
                 .lineSpacing(4)
         }
@@ -291,15 +291,36 @@ public struct DocumentViewer: View {
             ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(cell.paragraphs.enumerated()), id: \.offset) { _, p in
-                        renderParagraph(p)
+                        renderParagraph(p, textColor: contrastText(on: cell))
                     }
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(cell.isHeader ? state.theme.surfaceSecondary : state.theme.surface)
+                .background(cellBackground(cell))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
+    }
+
+    /// Text colour that stays readable on a cell fill the document chose (nil: the theme's own).
+    private func contrastText(on cell: TableCell) -> Color? {
+        guard (cell.fill >> 24) != 0 else { return nil }
+        let r = Double((cell.fill >> 16) & 0xff)
+        let g = Double((cell.fill >> 8) & 0xff)
+        let b = Double(cell.fill & 0xff)
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 140 ? Color(white: 0.11) : Color(white: 0.95)
+    }
+
+    /// The fill the document gave the cell, else the theme's header or body surface.
+    private func cellBackground(_ cell: TableCell) -> Color {
+        guard (cell.fill >> 24) != 0 else {
+            return cell.isHeader ? state.theme.surfaceSecondary : state.theme.surface
+        }
+        return Color(
+            .sRGB,
+            red: Double((cell.fill >> 16) & 0xff) / 255,
+            green: Double((cell.fill >> 8) & 0xff) / 255,
+            blue: Double(cell.fill & 0xff) / 255)
     }
 
     private func renderGridHeader(_ gh: GridHeader) -> some View {
