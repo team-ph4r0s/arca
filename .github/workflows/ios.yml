@@ -5,7 +5,7 @@
 #   tag v*                       same + ready for release packaging
 #   workflow_dispatch            manual trigger
 #
-# Runs on macos-14 (Apple Silicon M-series runners).
+# Runs on macos-15 (Apple Silicon M-series runners); GitHub no longer provides macos-14.
 # Third-party actions are pinned to full commit SHAs.
 name: ios
 
@@ -52,7 +52,7 @@ env:
 jobs:
   ios-suite:
     name: xcframework · swift tests · app
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
