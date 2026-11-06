@@ -23,7 +23,9 @@ RUN apt-get update -qq \
         openjdk-17-jdk-headless shellcheck jq file xz-utils \
  && rm -rf /var/lib/apt/lists/*
 
-ENV RUSTUP_HOME=/root/.rustup \
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+    JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 \
+    RUSTUP_HOME=/root/.rustup \
     CARGO_HOME=/root/.cargo \
     CARGO_TARGET_DIR=/tmp/arca-target \
     CARGO_INCREMENTAL=0 \

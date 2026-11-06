@@ -259,7 +259,7 @@ public struct XRayReportView: View {
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(state.theme.textPrimary)
 
-                                Text("\(macro.language) • Посмотреть исходный код")
+                                Text("\(macro.language) • Подробнее: разбор и исходный код")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(state.theme.accent)
                             }

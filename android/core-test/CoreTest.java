@@ -312,6 +312,26 @@ public final class CoreTest {
         eq(1, Model.intentRank("Suspicious"), "suspicious");
         eq(1, w.macros.get(1).intentRank(), "an intent from a newer engine counts as suspicious");
 
+        // The "More" explanation: verdict, both languages, the static trace and the indicators.
+        String withExplain = "{\"macros\":[{\"lang\":\"Vba\",\"name\":\"Redir\",\"intent\":\"Malicious\","
+            + "\"explain\":{\"verdict\":\"Hostile\","
+            + "\"title\":{\"ru\":\"Макрос перенаправления на сайт\",\"en\":\"Redirecting macro\"},"
+            + "\"summary\":{\"ru\":\"Способен перенаправить вас\",\"en\":\"Can redirect you\"},"
+            + "\"steps\":[{\"ru\":\"Запускается сам\",\"en\":\"Starts by itself\"},{\"ru\":\"Вывод\",\"en\":\"Conclusion\"}],"
+            + "\"iocs\":[{\"kind\":\"Url\",\"value\":\"http://evil.example.test/pay\"}]}},"
+            + "{\"lang\":\"Vba\",\"name\":\"Plain\"}]}";
+        Model.Report x = Model.parseReport(withExplain.getBytes(StandardCharsets.UTF_8));
+        Model.Explain explained = x.macros.get(0).explain;
+        check(explained != null, "an explanation is parsed");
+        eq("Hostile", explained.verdict, "explanation verdict");
+        eq("Redirecting macro", explained.title.of(false), "English title");
+        eq("Макрос перенаправления на сайт", explained.title.of(true), "Russian title");
+        eq(2, explained.steps.size(), "explanation steps");
+        eq("Вывод", explained.steps.get(1).ru, "last step");
+        eq("Url", explained.iocs.get(0)[0], "indicator kind");
+        eq("http://evil.example.test/pay", explained.iocs.get(0)[1], "indicator value");
+        check(x.macros.get(1).explain == null, "no explanation without the field");
+
         // Tolerant parsing: an empty object still gives a (non-clean) report.
         Model.Report e = Model.parseReport("{}".getBytes(StandardCharsets.UTF_8));
         eq(Model.Verdict.UNVERIFIED, e.verdict, "a missing verdict is never 'clean'");

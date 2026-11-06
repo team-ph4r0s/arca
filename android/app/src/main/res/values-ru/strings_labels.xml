@@ -208,4 +208,10 @@
     <string name="format_gif">Картинка GIF</string>
     <string name="format_jpeg">Картинка JPEG</string>
     <string name="format_png">Картинка PNG</string>
+    <string name="explain_more">Подробнее: пошаговый разбор</string>
+    <string name="explain_less">Скрыть разбор</string>
+    <string name="explain_part1">1. ЧТО ЭТО И К ЧЕМУ МОЖЕТ ПРИВЕСТИ</string>
+    <string name="explain_part2">2. ПОШАГОВЫЙ РАЗБОР (БЕЗ ЗАПУСКА)</string>
+    <string name="explain_part3">3. АДРЕСА, ПУТИ И ВЫЗОВЫ</string>
+    <string name="explain_part4">4. ИСХОДНЫЙ ТЕКСТ (ПРОСТО ТЕКСТ)</string>
 </resources>

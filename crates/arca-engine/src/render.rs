@@ -124,6 +124,40 @@ fn strings(w: &mut JsonWriter, key: &str, items: &[String]) {
     w.end_array();
 }
 
+/// Writes `"explain":{"verdict","title":{ru,en},"summary":{ru,en},"steps":[{ru,en}],"iocs":[{kind,value}]}`:
+/// the static explanation behind the "More" button (nothing was executed to produce it).
+fn explain_json(w: &mut JsonWriter, e: &arca_xray::explain::Explanation) {
+    fn text(w: &mut JsonWriter, t: &arca_xray::explain::Text) {
+        w.begin_object();
+        w.field_label("ru", &t.ru, DETAIL_CHARS);
+        w.field_label("en", &t.en, DETAIL_CHARS);
+        w.end_object();
+    }
+    w.key("explain");
+    w.begin_object();
+    w.field_name("verdict", &e.verdict);
+    w.key("title");
+    text(w, &e.title);
+    w.key("summary");
+    text(w, &e.summary);
+    w.key("steps");
+    w.begin_array();
+    for step in &e.steps {
+        text(w, step);
+    }
+    w.end_array();
+    w.key("iocs");
+    w.begin_array();
+    for ioc in &e.iocs {
+        w.begin_object();
+        w.field_name("kind", &ioc.kind);
+        w.field_label("value", &ioc.value, LABEL_CHARS);
+        w.end_object();
+    }
+    w.end_array();
+    w.end_object();
+}
+
 /// Writes the X-ray report as JSON.
 #[must_use]
 pub fn report_json(report: &XRayReport) -> Vec<u8> {
@@ -181,6 +215,7 @@ pub fn report_json_within(report: &XRayReport, max_bytes: usize) -> Option<Vec<u
         strings(&mut w, "iocs", &m.iocs);
         w.field_name("intent", &m.intent);
         strings(&mut w, "procs", &m.procedures);
+        explain_json(&mut w, &arca_xray::explain::explain_macro(m));
         w.key("behaviors");
         w.begin_array();
         for b in &m.behaviors {

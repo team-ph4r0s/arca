@@ -30,6 +30,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod explain;
 mod fields;
 pub mod format;
 mod formulas;
