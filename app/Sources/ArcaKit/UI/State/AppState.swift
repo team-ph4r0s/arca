@@ -25,11 +25,23 @@ public final class AppState: ObservableObject {
     @Published public var inspectedMacro: MacroModule?
     @Published public var inspectedImage: DecodedImage?
     @Published public var activeError: ArcaError?
+    /// What the sandbox spent on the most recent run (scan, preview or page render): the figures
+    /// the viewer's metrics bar shows. Always set on the main actor, after the engine answered.
+    @Published public private(set) var lastRun: SandboxRun?
 
     public let engine: ArcaEngine
     public let patronStore: PatronStore
 
+    /// One sandbox run and its resource use.
+    public struct SandboxRun: Sendable, Equatable {
+        public enum Kind: String, Sendable { case scan, preview, render }
+        public let kind: Kind
+        public let diagnostics: RunDiagnostics
+    }
+
     private var activeDocument: DocumentSession?
+    private var previewSession: PreviewSession?
+    private var pictureCache: [Int: CGImage] = [:]
     private var activeDocumentName: String = ""
     private var pendingDocumentData: Data?
 
@@ -91,6 +103,7 @@ public final class AppState: ObservableObject {
                 active: Int(result.report.active)
             )
 
+            lastRun = SandboxRun(kind: .scan, diagnostics: result.diagnostics)
             currentScreen = .report(report: result.report, diagnostics: result.diagnostics)
         } catch ArcaError.encrypted, ArcaError.wrongPassword {
             isPasswordPromptVisible = true
@@ -120,8 +133,51 @@ public final class AppState: ObservableObject {
 
     /// Loads preview items for the document currently owned by the app state.
     public func previewItems(section: UInt32, from: UInt64, count: UInt32) async throws -> [PreviewItem] {
+        // Slices come from the one preview run made when the viewer was opened.
+        if let preview = previewSession {
+            return try preview.items(section: section, from: from, count: count)
+        }
         guard let session = activeDocument else { throw ArcaError.badHandle }
         return try await engine.previewItems(document: session, section: section, from: from, count: count)
+    }
+
+    /// Renders one page (0-based) of the active document into a vector drawing.
+    ///
+    /// The metrics of the render run are published on the main actor once the engine answered.
+    public func renderPage(_ pageNumber: Int) async throws -> PageDrawing {
+        guard let session = activeDocument else { throw ArcaError.badHandle }
+        let result = try await engine.renderPageWithDiagnostics(
+            document: session, pageNumber: UInt32(max(0, pageNumber)))
+        lastRun = SandboxRun(kind: .render, diagnostics: result.diagnostics)
+        return try PageDrawing.parse(result.json)
+    }
+
+    /// A picture of the active document decoded in the sandbox, or `nil` if it cannot be shown.
+    public func picture(id: Int) async -> CGImage? {
+        if let cached = pictureCache[id] { return cached }
+        guard let session = activeDocument,
+            let decoded = try? await engine.decodeImage(document: session, imageId: id),
+            let image = Self.makeCGImage(from: decoded)
+        else { return nil }
+        pictureCache[id] = image
+        objectWillChange.send()
+        return image
+    }
+
+    /// The pictures decoded so far (the page canvas redraws when this grows).
+    public var decodedPictures: [Int: CGImage] { pictureCache }
+
+    nonisolated static func makeCGImage(from img: DecodedImage) -> CGImage? {
+        let width = img.facts.width
+        let height = img.facts.height
+        guard width > 0, height > 0, img.rgbaPixels.count == width * height * 4,
+            let provider = CGDataProvider(data: img.rgbaPixels as CFData)
+        else { return nil }
+        return CGImage(
+            width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
     }
 
     /// Transitions to the safe read-only preview viewer.
@@ -129,7 +185,10 @@ public final class AppState: ObservableObject {
         guard let session = activeDocument else { return }
         Task {
             do {
-                let meta = try await engine.previewMeta(document: session)
+                let preview = try await engine.openPreview(document: session)
+                previewSession = preview
+                lastRun = SandboxRun(kind: .preview, diagnostics: preview.diagnostics)
+                let meta = preview.meta
                 currentScreen = .viewer(report: report, meta: meta, diagnostics: diagnostics)
                 ArcaHaptics.selection()
             } catch let err as ArcaError {
@@ -185,6 +244,9 @@ public final class AppState: ObservableObject {
 
     /// Closes the current document, wipes session memory, and returns to the home screen.
     public func closeDocument() {
+        previewSession = nil
+        pictureCache = [:]
+        lastRun = nil
         activeDocument?.close()
         activeDocument = nil
         activeDocumentName = ""

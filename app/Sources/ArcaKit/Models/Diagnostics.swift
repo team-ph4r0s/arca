@@ -28,6 +28,29 @@ public struct RunDiagnostics: Decodable, Sendable, Equatable {
         let wallMs: Int64
     }
 
+    /// Memberwise initializer (a struct with a custom `init(from:)` gets none synthesized).
+    public init(
+        status: Int = 0,
+        statusName: String = "",
+        message: String = "",
+        fuel: Int64 = 0,
+        fuelLimit: Int64 = 0,
+        peakMemory: Int64 = 0,
+        slices: Int64 = 0,
+        wallMs: Int64 = 0,
+        unlock: Int = 0
+    ) {
+        self.status = status
+        self.statusName = statusName
+        self.message = message
+        self.fuel = fuel
+        self.fuelLimit = fuelLimit
+        self.peakMemory = peakMemory
+        self.slices = slices
+        self.wallMs = wallMs
+        self.unlock = unlock
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         status = try c.decodeIfPresent(Int.self, forKey: .status) ?? 0
