@@ -207,8 +207,12 @@ impl Wire for Image {
         let rgba = r.bytes()?;
         r.leave();
         // The host never trusts the size the guest states: the buffer must be exactly it.
-        let expect = u64::from(width) * u64::from(height) * 4;
-        if width == 0 || height == 0 || u64::try_from(rgba.len()).ok() != Some(expect) {
+        // The product of two stated sizes can exceed `u64` (u32::MAX × u32::MAX × 4), so it is
+        // checked: a panic here would let a hostile guest stop the host.
+        let expect =
+            u64::from(width).checked_mul(u64::from(height)).and_then(|px| px.checked_mul(4));
+        if width == 0 || height == 0 || expect.is_none() || u64::try_from(rgba.len()).ok() != expect
+        {
             return Err(WireError::LengthLimit);
         }
         Ok(Self { width, height, rgba, facts })

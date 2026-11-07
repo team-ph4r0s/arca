@@ -99,3 +99,30 @@ fn the_input_that_failed_the_fuzzer_in_ci() {
         .join()
         .expect("the wire properties hold for the CI crash input");
 }
+
+/// A hostile guest states `u32::MAX × u32::MAX` pixels: `width × height × 4` overflows `u64`.
+/// That used to panic in `Image::decode` (found by the `wire` fuzzer in CI); it must be an error.
+#[test]
+fn an_image_that_states_an_overflowing_size_is_refused_not_a_panic() {
+    let png = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../arca-image/tests/fixtures/img-411-opt.ref.png"
+    ))
+    .expect("a fixture picture");
+    let image = arca_image::decode(&png, &arca_image::Limits::default()).expect("a readable PNG");
+    let (w, h) = (image.width, image.height);
+    let mut bytes = wire::to_bytes(&image).expect("an image encodes");
+    // The sizes are two little-endian u32 in a row, the last such pair before the pixel buffer
+    // (the facts before them state the size of the original too).
+    let stated: Vec<u8> = [w.to_le_bytes(), h.to_le_bytes()].concat();
+    let head = bytes.len() - image.rgba.len();
+    let at = bytes[..head]
+        .windows(stated.len())
+        .rposition(|pair| pair == stated.as_slice())
+        .expect("the stated size is in the encoding");
+    bytes[at..at + 8].copy_from_slice(&[0xFF; 8]);
+    let decoded = wire::from_bytes::<Image>(&bytes, DecodeLimits::default());
+    assert!(decoded.is_err(), "an overflowing size must be refused");
+    // And the whole fuzz target survives it.
+    target(&bytes);
+}
