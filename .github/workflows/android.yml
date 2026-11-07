@@ -228,8 +228,11 @@ jobs:
             printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
             echo "signing=release" >> "$GITHUB_OUTPUT"
           else
-            echo "No release key in the 'release' environment: this build is signed with a THROWAWAY key."
-            echo "signing=throwaway" >> "$GITHUB_OUTPUT"
+            # A release signed with a throwaway key cannot update an installed Arca: everyone who
+            # updates would have to uninstall first. A tag without the permanent key is a broken
+            # environment, not a reason to publish such a package as the latest release.
+            echo "No release key in the 'release' environment (ARCA_KEYSTORE_B64, ARCA_KEYSTORE_PASS, ARCA_KEY_ALIAS): refusing to release." >&2
+            exit 1
           fi
       - name: build, sign and verify the APK
         env:
