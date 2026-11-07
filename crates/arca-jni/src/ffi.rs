@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPLv3 section 7: see LICENSE_ADDITIONAL_TERMS.md in the repository root.
 
-//! The JNI entry points: the one file of the workspace that contains `unsafe` code
-//! (apart from the five export attributes of the Wasm guest).
+//! The JNI entry points: the one file of this crate that contains `unsafe` code. The other
+//! exceptions in the workspace are the C ABI boundary of `arca-ffi` (`crates/arca-ffi/src/ffi.rs`)
+//! and the export attributes of the Wasm guest.
 //!
 //! Every function here does the same three things and nothing else:
 //!
@@ -182,10 +183,14 @@ fn guard<T>(default: T, f: impl FnOnce() -> T) -> T {
 }
 
 fn bytes_result(env: Env, f: impl FnOnce() -> Option<Vec<u8>>) -> JObject {
-    let Some(data) = catch_unwind(AssertUnwindSafe(f)).ok().flatten() else {
+    let Some(mut data) = catch_unwind(AssertUnwindSafe(f)).ok().flatten() else {
         return null_mut();
     };
-    JniEnv::new(env).and_then(|e| e.new_array(&data)).unwrap_or(null_mut())
+    let array = JniEnv::new(env).and_then(|e| e.new_array(&data)).unwrap_or(null_mut());
+    // The bytes are text and pixels of the document: the Rust copy is wiped once the JVM has its
+    // own, as `arca_buffer_free` does on the C ABI side.
+    data.zeroize();
+    array
 }
 
 /// The bytes of an optional `byte[]` argument (`null` is an empty record).
@@ -201,8 +206,13 @@ fn optional_bytes(env: Env, array: JObject) -> Vec<u8> {
 const BAD_ARGUMENT: JInt = 12;
 const FAULT: JInt = 9;
 
+/// Takes ownership of `fd`.
+///
+/// # Safety
+///
+/// `fd` must be negative or an open descriptor that nothing else owns or closes afterwards.
 #[cfg(unix)]
-fn file_from_fd(fd: JInt) -> Option<File> {
+unsafe fn file_from_fd(fd: JInt) -> Option<File> {
     use std::os::fd::FromRawFd;
     if fd < 0 {
         return None;
@@ -213,7 +223,7 @@ fn file_from_fd(fd: JInt) -> Option<File> {
 }
 
 #[cfg(not(unix))]
-fn file_from_fd(_fd: JInt) -> Option<File> {
+unsafe fn file_from_fd(_fd: JInt) -> Option<File> {
     None
 }
 
@@ -311,7 +321,8 @@ pub extern "system" fn Java_org_arca_viewer_Native_docReadFd(
     doc: JLong,
     fd: JInt,
 ) -> JLong {
-    guard(-i64::from(FAULT), || match file_from_fd(fd) {
+    // SAFETY: the Java side passes `ParcelFileDescriptor.detachFd()`, which gives up ownership.
+    guard(-i64::from(FAULT), || match unsafe { file_from_fd(fd) } {
         Some(mut file) => api::doc_read(doc, &mut file),
         None => -i64::from(BAD_ARGUMENT),
     })
@@ -453,7 +464,8 @@ pub extern "system" fn Java_org_arca_viewer_Native_sanitizedWriteFd(
     outcome: JLong,
     fd: JInt,
 ) -> JLong {
-    guard(-i64::from(FAULT), || match file_from_fd(fd) {
+    // SAFETY: the Java side passes `ParcelFileDescriptor.detachFd()`, which gives up ownership.
+    guard(-i64::from(FAULT), || match unsafe { file_from_fd(fd) } {
         Some(mut file) => api::sanitized_write(outcome, &mut file),
         None => -i64::from(BAD_ARGUMENT),
     })
