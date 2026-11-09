@@ -425,6 +425,13 @@ impl Engine {
         }
         let mut policy = self.policy_for(op, document.len(), inflated);
         self.size_for_picture_copy(&mut policy, op, op_flags, document);
+        if !password.is_empty() || document.starts_with(&COMPOUND_FILE_MAGIC) {
+            // Opening an encrypted document stretches the password (100 000 hash rounds for
+            // Office) before any of the usual work starts; a compound file may be an encrypted
+            // package that is tried with the built-in password even when the reader gave none.
+            policy.fuel.base = policy.fuel.base.saturating_add(KEY_DERIVATION_FUEL);
+            policy.fuel.max = policy.fuel.max.max(policy.fuel.base).min(MAX_FUEL_CEILING);
+        }
         let mut sandbox = Sandbox::new(policy, [self.module.pin()]);
         if let Some(prepared) = &self.prepared {
             sandbox = sandbox.with_prepared(prepared.clone());
@@ -663,6 +670,11 @@ const DEFAULT_MAX_RATIO: u64 = 20;
 /// earlier scan reports can raise a run above it (they only move the budget up to it). Wall-clock
 /// limits, not fuel, are what end a slow run on a phone.
 const MAX_FUEL_CEILING: u64 = 1_000_000_000_000;
+/// Fuel set aside for stretching a password: twice what the 100 000 SHA-512 rounds of an Office
+/// package measure (about 1.7·10⁹), since the key and the integrity check each derive once.
+const KEY_DERIVATION_FUEL: u64 = 6_000_000_000;
+/// The first bytes of a compound file (the container of an encrypted Office package).
+const COMPOUND_FILE_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 /// The most a report, a preview or a page drawing may weigh (a sterile copy adds its own size).
 const MAX_RESULT_BYTES: usize = 64 << 20;
 /// The most a displayed picture may weigh.

@@ -258,6 +258,8 @@ pub(crate) fn scan(ctx: &mut Ctx<'_>, data: &[u8], location: &str) -> Result<Fil
             );
             return Ok(format);
         }
+        // Opened elsewhere: the package was decrypted and is scanned on its own.
+        FileFormat::EncryptedOoxml if ctx.policy.package_opened => {}
         FileFormat::EncryptedOoxml => {
             let detail = encryption_info(&cf);
             ctx.report.add(ThreatKind::EncryptedDocument, location, format!("password-protected OOXML ({detail}); contents cannot be inspected without the password"));

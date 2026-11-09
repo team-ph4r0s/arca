@@ -261,20 +261,345 @@ pub(super) fn preset(name: &str, w: f64, h: f64, adj: [Option<f64>; 2]) -> Optio
         n if n.starts_with("bentConnector") || n.starts_with("curvedConnector") => {
             Preset { segs: vec![Seg::M(0.0, 0.0), Seg::L(w, h)], open: true, rough: true }
         }
-        // A cylinder, a block of text with a folded corner and the like: the frame is the
-        // likeness.
+        "round1Rect" => closed(corner_rect(w, h, [0.0, ss * a(0, 16_667.0, 0.5), 0.0, 0.0], true)),
+        "round2SameRect" => {
+            let (top, bottom) = (ss * a(0, 16_667.0, 0.5), ss * a(1, 0.0, 0.5));
+            closed(corner_rect(w, h, [top, top, bottom, bottom], true))
+        }
+        "round2DiagRect" => {
+            let (one, other) = (ss * a(0, 16_667.0, 0.5), ss * a(1, 0.0, 0.5));
+            closed(corner_rect(w, h, [one, other, one, other], true))
+        }
+        "snip1Rect" | "flowChartPunchedCard" => {
+            let r = ss * a(0, 16_667.0, 0.5);
+            let cut = if name == "snip1Rect" { [0.0, r, 0.0, 0.0] } else { [r, 0.0, 0.0, 0.0] };
+            closed(corner_rect(w, h, cut, false))
+        }
+        "snip2SameRect" => {
+            let (top, bottom) = (ss * a(0, 16_667.0, 0.5), ss * a(1, 0.0, 0.5));
+            closed(corner_rect(w, h, [top, top, bottom, bottom], false))
+        }
+        "snip2DiagRect" => {
+            let (one, other) = (ss * a(0, 0.0, 0.5), ss * a(1, 16_667.0, 0.5));
+            closed(corner_rect(w, h, [one, other, one, other], false))
+        }
+        "snipRoundRect" => {
+            let r = ss * a(0, 16_667.0, 0.5);
+            rough(corner_rect(w, h, [r, r, 0.0, 0.0], false))
+        }
+        "plaque" | "bevel" | "frame" | "foldedCorner" | "cube" => rough(rect(w, h)),
+        "leftRightArrow" => {
+            let head =
+                (ss * a(1, 50_000.0, if ss > 0.0 { w / ss / 2.0 } else { 0.5 })).min(w / 2.0);
+            let y1 = h * (1.0 - a(0, 50_000.0, 1.0)) / 2.0;
+            closed(poly(
+                &[
+                    (0.0, h / 2.0),
+                    (head, 0.0),
+                    (head, y1),
+                    (w - head, y1),
+                    (w - head, 0.0),
+                    (w, h / 2.0),
+                    (w - head, h),
+                    (w - head, h - y1),
+                    (head, h - y1),
+                    (head, h),
+                ],
+                true,
+            ))
+        }
+        "upDownArrow" => {
+            let head =
+                (ss * a(1, 50_000.0, if ss > 0.0 { h / ss / 2.0 } else { 0.5 })).min(h / 2.0);
+            let x1 = w * (1.0 - a(0, 50_000.0, 1.0)) / 2.0;
+            closed(poly(
+                &[
+                    (w / 2.0, 0.0),
+                    (w, head),
+                    (w - x1, head),
+                    (w - x1, h - head),
+                    (w, h - head),
+                    (w / 2.0, h),
+                    (0.0, h - head),
+                    (x1, h - head),
+                    (x1, head),
+                    (0.0, head),
+                ],
+                true,
+            ))
+        }
+        "notchedRightArrow" | "stripedRightArrow" | "bentArrow" | "uturnArrow"
+        | "curvedRightArrow" | "curvedLeftArrow" | "circularArrow" | "swooshArrow" => {
+            let head = ss * 0.5_f64.min(if ss > 0.0 { w / ss } else { 1.0 });
+            rough(poly(&arrow_points(w, h, 0.5, head), true))
+        }
+        "rightArrowCallout"
+        | "leftArrowCallout"
+        | "upArrowCallout"
+        | "downArrowCallout"
+        | "leftRightArrowCallout"
+        | "quadArrowCallout"
+        | "quadArrow"
+        | "leftRightUpArrow"
+        | "leftUpArrow"
+        | "bentUpArrow" => rough(rect(w, h)),
+        "star4" | "star6" | "star7" | "star8" | "star10" | "star12" | "star16" | "star24"
+        | "star32" | "irregularSeal1" | "irregularSeal2" => {
+            let points: u32 = name.trim_start_matches("star").parse().unwrap_or(12).clamp(4, 32);
+            let inner = match points {
+                4 => 0.25,
+                6 => 0.577,
+                7 => 0.69,
+                8 | 10 => 0.75,
+                _ => 0.8,
+            };
+            let pts: Vec<(f64, f64)> = (0..points * 2)
+                .map(|i| {
+                    let t = (f64::from(i) * 180.0 / f64::from(points) - 90.0).to_radians();
+                    let r = if i % 2 == 0 { 1.0 } else { inner };
+                    (r * t.cos(), r * t.sin())
+                })
+                .collect();
+            let p = poly(&fit(&pts, w, h), true);
+            if name.starts_with("star") { closed(p) } else { rough(p) }
+        }
+        "heptagon" | "decagon" | "dodecagon" => {
+            let sides: u32 = match name {
+                "heptagon" => 7,
+                "decagon" => 10,
+                _ => 12,
+            };
+            let pts: Vec<(f64, f64)> = (0..sides)
+                .map(|i| {
+                    let t = (f64::from(i) * 360.0 / f64::from(sides) - 90.0).to_radians();
+                    (t.cos(), t.sin())
+                })
+                .collect();
+            closed(poly(&fit(&pts, w, h), true))
+        }
+        "wedgeRectCallout"
+        | "borderCallout1"
+        | "borderCallout2"
+        | "borderCallout3"
+        | "accentCallout1"
+        | "accentCallout2"
+        | "accentCallout3"
+        | "callout1"
+        | "callout2"
+        | "callout3"
+        | "accentBorderCallout1"
+        | "accentBorderCallout2"
+        | "accentBorderCallout3" => rough(rect(w, h)),
+        "wedgeRoundRectCallout" => rough(round_rect(w, h, ss * 0.166_67)),
+        "wedgeEllipseCallout"
+        | "cloudCallout"
+        | "cloud"
+        | "donut"
+        | "noSmoking"
+        | "sun"
+        | "smileyFace"
+        | "pie"
+        | "chord"
+        | "teardrop"
+        | "blockArc"
+        | "moon"
+        | "heart"
+        | "flowChartDelay"
+        | "flowChartMagneticDrum"
+        | "flowChartMagneticTape"
+        | "flowChartDisplay"
+        | "flowChartOnlineStorage"
+        | "actionButtonBlank"
+        | "pieWedge" => rough(ellipse(w, h)),
+        "flowChartExtract" => closed(poly(&[(0.0, h), (w / 2.0, 0.0), (w, h)], true)),
+        "flowChartMerge" => closed(poly(&[(0.0, 0.0), (w, 0.0), (w / 2.0, h)], true)),
+        "flowChartSort" => {
+            closed(poly(&[(w / 2.0, 0.0), (w, h / 2.0), (w / 2.0, h), (0.0, h / 2.0)], true))
+        }
+        "flowChartCollate" => closed(poly(&[(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)], true)),
+        "flowChartManualInput" => closed(poly(&[(0.0, h / 5.0), (w, 0.0), (w, h), (0.0, h)], true)),
+        "mathMinus" => closed(poly(
+            &[
+                (w * 0.13, h * 0.38),
+                (w * 0.87, h * 0.38),
+                (w * 0.87, h * 0.62),
+                (w * 0.13, h * 0.62),
+            ],
+            true,
+        )),
+        // Brackets and braces are lines: only their frame's sides are hinted at.
+        "leftBracket" | "leftBrace" => Preset {
+            segs: poly(&[(w, 0.0), (0.0, 0.0), (0.0, h), (w, h)], false),
+            open: true,
+            rough: true,
+        },
+        "rightBracket" | "rightBrace" => Preset {
+            segs: poly(&[(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)], false),
+            open: true,
+            rough: true,
+        },
+        "bracketPair" | "bracePair" => Preset {
+            segs: vec![
+                Seg::M(w * 0.08, 0.0),
+                Seg::L(0.0, 0.0),
+                Seg::L(0.0, h),
+                Seg::L(w * 0.08, h),
+                Seg::M(w * 0.92, 0.0),
+                Seg::L(w, 0.0),
+                Seg::L(w, h),
+                Seg::L(w * 0.92, h),
+            ],
+            open: true,
+            rough: true,
+        },
+        "arc" => Preset {
+            segs: vec![
+                Seg::M(w / 2.0, 0.0),
+                Seg::C(w / 2.0 + w / 2.0 * KAPPA, 0.0, w, h / 2.0 - h / 2.0 * KAPPA, w, h / 2.0),
+            ],
+            open: true,
+            rough: true,
+        },
+        // A cylinder, a document with a wavy edge and the like: the frame is the likeness.
         "can"
-        | "cube"
-        | "foldedCorner"
         | "flowChartDocument"
         | "flowChartMultidocument"
         | "flowChartMagneticDisk"
-        | "snip1Rect"
-        | "snip2SameRect"
-        | "round1Rect"
-        | "round2SameRect" => rough(rect(w, h)),
+        | "flowChartPunchedTape"
+        | "wave"
+        | "doubleWave"
+        | "ribbon"
+        | "ribbon2"
+        | "ellipseRibbon"
+        | "ellipseRibbon2"
+        | "horizontalScroll"
+        | "verticalScroll"
+        | "gear6"
+        | "gear9"
+        | "funnel"
+        | "lightningBolt"
+        | "halfFrame"
+        | "corner"
+        | "diagStripe"
+        | "mathMultiply"
+        | "mathDivide"
+        | "mathEqual"
+        | "mathNotEqual"
+        | "chartPlus"
+        | "chartStar"
+        | "chartX"
+        | "cornerTabs"
+        | "plaqueTabs"
+        | "squareTabs" => rough(rect(w, h)),
         _ => return None,
     })
+}
+
+/// A rectangle whose corners (top left, top right, bottom right, bottom left) are each cut by
+/// the given amount: rounded when `round`, snipped straight otherwise. Zero leaves the corner.
+fn corner_rect(w: f64, h: f64, cut: [f64; 4], round: bool) -> Vec<Seg> {
+    let lim = w.min(h) / 2.0;
+    let [tl, tr, br, bl] = cut.map(|c| if c.is_finite() { c.clamp(0.0, lim) } else { 0.0 });
+    let corner = |out: &mut Vec<Seg>, from: (f64, f64), at: (f64, f64), to: (f64, f64)| {
+        if round {
+            let k = 1.0 - KAPPA;
+            out.push(Seg::C(
+                from.0 + (at.0 - from.0) * (1.0 - k),
+                from.1 + (at.1 - from.1) * (1.0 - k),
+                to.0 + (at.0 - to.0) * (1.0 - k),
+                to.1 + (at.1 - to.1) * (1.0 - k),
+                to.0,
+                to.1,
+            ));
+        } else {
+            out.push(Seg::L(to.0, to.1));
+        }
+    };
+    let mut out = vec![Seg::M(tl, 0.0), Seg::L(w - tr, 0.0)];
+    corner(&mut out, (w - tr, 0.0), (w, 0.0), (w, tr));
+    out.push(Seg::L(w, h - br));
+    corner(&mut out, (w, h - br), (w, h), (w - br, h));
+    out.push(Seg::L(bl, h));
+    corner(&mut out, (bl, h), (0.0, h), (0.0, h - bl));
+    out.push(Seg::L(0.0, tl));
+    corner(&mut out, (0.0, tl), (0.0, 0.0), (tl, 0.0));
+    out.push(Seg::Z);
+    out
+}
+
+/// Whether an unknown preset is better hinted at by an outline than by a filled frame: lines,
+/// brackets and connectors enclose nothing.
+pub(super) fn is_line_like(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    ["connector", "bracket", "brace", "line", "arc"].iter().any(|k| n.contains(k))
+}
+
+/// The rectangle text is laid out in, `[x, y, w, h]` in the shape's own coordinates, for a frame
+/// of `w × h`: inside the body of the shape, as the office suites place it (ISO 29500 gives a
+/// text rectangle for every preset; these are the ones that differ visibly from the frame).
+pub(super) fn text_rect(name: &str, w: f64, h: f64) -> [f64; 4] {
+    let inset = |l: f64, t: f64, r: f64, b: f64| {
+        let (x0, y0) = (w * l, h * t);
+        [x0, y0, (w * (1.0 - l - r)).max(0.0), (h * (1.0 - t - b)).max(0.0)]
+    };
+    // The square inscribed in an ellipse leaves (1 - cos 45°) / 2 on each side.
+    const ROUND: f64 = 0.146_45;
+    match name {
+        "ellipse"
+        | "flowChartConnector"
+        | "flowChartSummingJunction"
+        | "flowChartOr"
+        | "donut"
+        | "sun"
+        | "smileyFace"
+        | "wedgeEllipseCallout"
+        | "cloud"
+        | "cloudCallout"
+        | "noSmoking"
+        | "pie"
+        | "chord"
+        | "teardrop" => inset(ROUND, ROUND, ROUND, ROUND),
+        "diamond" | "flowChartDecision" | "flowChartSort" => inset(0.25, 0.25, 0.25, 0.25),
+        "triangle" | "flowChartExtract" => inset(0.25, 0.5, 0.25, 0.0),
+        "flowChartMerge" => inset(0.25, 0.0, 0.25, 0.5),
+        "rtTriangle" => inset(0.083, 0.583, 0.417, 0.083),
+        "rightArrow" | "notchedRightArrow" | "stripedRightArrow" => inset(0.0, 0.25, 0.12, 0.25),
+        "leftArrow" => inset(0.12, 0.25, 0.0, 0.25),
+        "leftRightArrow" => inset(0.12, 0.25, 0.12, 0.25),
+        "upArrow" => inset(0.25, 0.12, 0.25, 0.0),
+        "downArrow" => inset(0.25, 0.0, 0.25, 0.12),
+        "upDownArrow" => inset(0.25, 0.12, 0.25, 0.12),
+        "chevron" => {
+            let k = if w > 0.0 { (h.min(w) * 0.5 / w).min(0.4) } else { 0.0 };
+            inset(k, 0.0, k, 0.0)
+        }
+        "homePlate" | "flowChartOffpageConnector" => {
+            let k = if w > 0.0 { (h.min(w) * 0.25 / w).min(0.4) } else { 0.0 };
+            inset(0.0, 0.0, k, 0.0)
+        }
+        "hexagon"
+        | "flowChartPreparation"
+        | "octagon"
+        | "heptagon"
+        | "decagon"
+        | "dodecagon"
+        | "pentagon" => inset(0.12, 0.12, 0.12, 0.12),
+        "parallelogram" | "flowChartInputOutput" | "trapezoid" | "flowChartManualOperation" => {
+            let k = if w > 0.0 { (h.min(w) * 0.25 / w).min(0.3) } else { 0.0 };
+            inset(k, 0.0, k, 0.0)
+        }
+        "plus" | "mathPlus" => inset(0.25, 0.25, 0.25, 0.25),
+        "star5" => inset(0.25, 0.38, 0.25, 0.2),
+        "star4" | "star6" | "star7" | "star8" | "star10" | "star12" | "star16" | "star24"
+        | "star32" | "irregularSeal1" | "irregularSeal2" => inset(0.22, 0.22, 0.22, 0.22),
+        "heart" => inset(0.17, 0.2, 0.17, 0.33),
+        "can" | "flowChartMagneticDisk" => inset(0.0, 0.25, 0.0, 0.08),
+        "cube" => inset(0.0, 0.25, 0.25, 0.0),
+        "flowChartDocument" | "flowChartMultidocument" | "wave" => inset(0.0, 0.0, 0.0, 0.2),
+        "flowChartTerminator" => inset(0.08, 0.0, 0.08, 0.0),
+        "flowChartManualInput" => inset(0.0, 0.2, 0.0, 0.0),
+        _ => [0.0, 0.0, w.max(0.0), h.max(0.0)],
+    }
 }
 
 /// Appends the arc of an ellipse with radii `wr`, `hr` that starts at the current point `from`

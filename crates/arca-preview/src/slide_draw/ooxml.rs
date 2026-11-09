@@ -12,13 +12,14 @@ mod chart;
 
 use super::presets::{self, arc_to};
 use super::{
-    Align, Anchor, Canvas, CellDraw, Mat, Node, Outcome, Para, Piece, Rendered, RunStyle, Seg,
-    Spacing, TextBody, draw_cells, draw_laid, f32c, family_of, fin, from_hsl, layout, num, parse,
-    root_attr, side, to_hsl,
+    Align, Anchor, Canvas, CellDraw, Flow, Mat, Node, Outcome, Para, Piece, Rendered, RunStyle,
+    Seg, Spacing, TextBody, draw_cells, draw_laid, f32c, family_of, fin, from_hsl, layout, num,
+    parse, root_attr, side, to_hsl,
 };
 use crate::model::IMAGE_NONE;
 use crate::opc::{self, Package};
 use crate::page::Prim;
+use crate::symbols::{self, SymbolFont};
 use crate::{PreviewError, PreviewPolicy};
 
 /// Elements whose text is kept: runs and the table style id.
@@ -166,6 +167,17 @@ struct Lvl {
     before: Option<Sp>,
     after: Option<Sp>,
     line: Option<Sp>,
+    /// The symbol font of the Latin typeface (`Some(None)`: an ordinary font is set).
+    sym: Option<Option<SymbolFont>>,
+    /// The symbol font of the bullet (`Some(None)`: the bullet follows the text).
+    bu_font: Option<Option<SymbolFont>>,
+    bu_color: Option<u32>,
+    /// The size of the bullet as a fraction of the text's.
+    bu_pct: Option<f64>,
+    /// The size of the bullet in points.
+    bu_pts: Option<f64>,
+    caps: Option<bool>,
+    rtl: Option<bool>,
 }
 
 impl Lvl {
@@ -176,7 +188,7 @@ impl Lvl {
         }
         take!(
             size, bold, italic, underline, strike, color, mono, serif, shift, algn, mar_l, indent,
-            bullet, before, after, line
+            bullet, before, after, line, sym, bu_font, bu_color, bu_pct, bu_pts, caps, rtl
         );
     }
 }
@@ -414,6 +426,9 @@ impl Look {
         if let Some(v) = n.attr("strike") {
             out.strike = Some(v.trim() != "noStrike");
         }
+        if let Some(v) = n.attr("cap") {
+            out.caps = Some(matches!(v.trim(), "all" | "small"));
+        }
         if let Some(b) = n.attr("baseline").and_then(num) {
             out.shift = Some(if b > 0.0 {
                 1
@@ -435,6 +450,7 @@ impl Look {
                         let (mono, serif) = self.typeface_family(face);
                         out.mono = Some(mono);
                         out.serif = Some(serif);
+                        out.sym = Some(symbols::symbol_font(face));
                     }
                 }
                 _ => {}
@@ -461,6 +477,9 @@ impl Look {
         if let Some(v) = n.attr("indent") {
             out.indent = Some(emu_pt(Some(v)));
         }
+        if let Some(v) = n.attr("rtl") {
+            out.rtl = Some(on(Some(v)));
+        }
         out.algn = match n.attr("algn").map(str::trim) {
             Some("l") => Some(Align::Start),
             Some("ctr") => Some(Align::Center),
@@ -475,10 +494,21 @@ impl Look {
                 "spcAft" => out.after = Self::read_spacing(k),
                 "buNone" => out.bullet = Some(Bu::None),
                 "buChar" => {
+                    // Kept as written: the font that says what it looks like may come from
+                    // another level of the style (see `bullet_text`).
                     let c = k.attr("char").unwrap_or_default();
-                    // Symbol-font code points would draw as boxes.
-                    let c = c.chars().next().filter(|c| !('\u{E000}'..='\u{F8FF}').contains(c));
-                    out.bullet = Some(Bu::Char(c.map_or_else(|| "•".to_owned(), String::from)));
+                    out.bullet = Some(Bu::Char(c.chars().take(4).collect()));
+                }
+                "buFont" => {
+                    out.bu_font = Some(k.attr("typeface").and_then(symbols::symbol_font));
+                }
+                "buFontTx" => out.bu_font = Some(None),
+                "buClr" => out.bu_color = self.color_in(k, None).or(out.bu_color),
+                "buSzPct" => {
+                    out.bu_pct = frac(k.attr("val")).map(|v| v.clamp(0.25, 4.0));
+                }
+                "buSzPts" => {
+                    out.bu_pts = k.attr("val").and_then(num).map(|v| (v / 100.0).clamp(1.0, 400.0));
                 }
                 "buAutoNum" => {
                     let start = k.attr("startAt").and_then(|v| v.trim().parse::<u32>().ok());
@@ -545,15 +575,27 @@ fn shape_mat(xf: &Xf, parent: &Mat) -> Mat {
 /// The frame text is laid out in: its size on the page (text is not scaled with its group) and the
 /// transform from it to the page. `rect` is in the coordinates `m` maps; `angle` is the direction
 /// of the text lines.
-fn text_frame(m: &Mat, rect: [f64; 4], angle: f64) -> (Mat, f64, f64) {
+fn text_frame(m: &Mat, rect: [f64; 4], angle: f64, flow: Flow) -> (Mat, f64, f64) {
     let [x, y, w, h] = rect;
     let c = m.apply(x + w / 2.0, y + h / 2.0);
     let (sx, sy) = m.axis_scales();
-    let (tw, th) = (w * sx, h * sy);
+    // Sideways text is laid out in the frame turned on its side: as wide as the shape is tall.
+    let (tw, th) = if flow.sideways() { (h * sy, w * sx) } else { (w * sx, h * sy) };
     let mt = Mat::translate(-tw / 2.0, -th / 2.0)
-        .then(Mat::rotate(angle))
+        .then(Mat::rotate(angle + flow.turn()))
         .then(Mat::translate(c.0, c.1));
     (mt, tw, th)
+}
+
+/// The bullet character as it is drawn: a symbol-font code becomes the character that looks
+/// like its glyph, and a private-use code without a known font a plain bullet.
+fn bullet_text(raw: &str, font: Option<SymbolFont>) -> String {
+    let Some(first) = raw.chars().next() else { return "•".to_owned() };
+    match font {
+        Some(f) => symbols::map_char(f, first).to_string(),
+        None if ('\u{E000}'..='\u{F8FF}').contains(&first) => "•".to_owned(),
+        None => first.to_string(),
+    }
 }
 
 /// A path of a shape's geometry.
@@ -981,8 +1023,11 @@ impl<'a> Pass<'a> {
                     None => {
                         self.cv
                             .approximated("a shape outside the preset table is drawn as its frame");
-                        outline_only = true;
-                        vec![GPath { segs: presets::rect(xf.w, xf.h), fill: false, stroke: true }]
+                        // A line-like shape encloses nothing; any other keeps its fill, so that
+                        // light text on a dark shape stays readable.
+                        let filled = !presets::is_line_like(prst);
+                        outline_only = !filled;
+                        vec![GPath { segs: presets::rect(xf.w, xf.h), fill: filled, stroke: true }]
                     }
                 }
             }
@@ -1033,8 +1078,14 @@ impl<'a> Pass<'a> {
         };
         let Some(tb) = self.text_body(&tx_chain, kind, font_ref, None) else { return };
         let rot = xf.rot + if xf.flip_v { std::f64::consts::PI } else { 0.0 };
-        let angle = Mat::rotate(rot).then(*parent);
-        let (mt, tw, th) = text_frame(&m, [0.0, 0.0, xf.w, xf.h], angle.b.atan2(angle.a));
+        let angle = Mat::rotate(rot).then(*parent).text_angle();
+        let rect = match geom {
+            Some(g) if g.name == "prstGeom" => {
+                presets::text_rect(g.attr("prst").unwrap_or("rect"), xf.w, xf.h)
+            }
+            _ => [0.0, 0.0, xf.w, xf.h],
+        };
+        let (mt, tw, th) = text_frame(&m, rect, angle, tb.flow);
         let laid = layout(&tb, tw, self.cv);
         draw_laid(self.cv, &tb, &laid, tw, th, &mt);
     }
@@ -1192,9 +1243,12 @@ impl<'a> Pass<'a> {
             Some("b") => Anchor::Bottom,
             _ => Anchor::Top,
         };
-        if bp("vert").is_some_and(|v| v != "horz") {
-            self.cv.approximated("vertical text is drawn horizontally");
-        }
+        let flow = match bp("vert").map(str::trim) {
+            Some("vert" | "eaVert" | "mongolianVert" | "wordArtVertRtl") => Flow::Down,
+            Some("vert270") => Flow::Up,
+            Some("wordArtVert") => Flow::Stacked,
+            _ => Flow::Horizontal,
+        };
         let scale = bps
             .iter()
             .find_map(|b| b.child("normAutofit"))
@@ -1206,11 +1260,15 @@ impl<'a> Pass<'a> {
             anchor,
             wrap: bp("wrap").map(str::trim) != Some("none"),
             scale,
+            flow,
         };
         let mut counters = [0u32; 9];
         for p in tx.kids_named("p").take(2_000) {
             let para = self.para(p, &layers, font_ref, extra, &mut counters);
             body.paras.push(para);
+        }
+        if flow == Flow::Stacked {
+            super::stack_letters(&mut body);
         }
         body.paras
             .iter()
@@ -1259,20 +1317,23 @@ impl<'a> Pass<'a> {
             color: lvl.color.unwrap_or(tx1),
             shift: lvl.shift.unwrap_or(0),
         };
-        let run_style = |rpr: Option<&Node>| -> RunStyle {
+        let run_lvl = |rpr: Option<&Node>| -> Lvl {
             let mut l = eff.clone();
             if let Some(r) = rpr {
                 let mut own = Lvl::default();
                 look.read_rpr(r, &mut own);
                 l.over(&own);
             }
-            style_of(&l)
+            l
         };
+        let run_style = |rpr: Option<&Node>| -> RunStyle { style_of(&run_lvl(rpr)) };
         let mut pieces: Vec<Piece> = Vec::new();
         for k in &p.kids {
             match k.name.as_str() {
                 "r" | "fld" => {
-                    let st = run_style(k.child("rPr"));
+                    let rpr = k.child("rPr");
+                    let lvl = run_lvl(rpr);
+                    let st = style_of(&lvl);
                     let raw = if k.name == "fld"
                         && k.attr("type").is_some_and(|t| t.starts_with("slidenum"))
                     {
@@ -1281,7 +1342,19 @@ impl<'a> Pass<'a> {
                         k.child("t").map(Node::own_text).unwrap_or_default()
                     };
                     if !raw.is_empty() {
-                        let text = self.cv.tidy(&raw);
+                        // A run in a symbol font, or symbol characters inside ordinary text
+                        // (`a:sym` names their font): shown as the characters they look like.
+                        let of_symbols = rpr
+                            .and_then(|r| r.child("sym"))
+                            .and_then(|s| s.attr("typeface"))
+                            .and_then(symbols::symbol_font);
+                        let shown = match lvl.sym.flatten() {
+                            Some(font) => symbols::map_text(font, &raw),
+                            None => symbols::map_private(&raw, of_symbols).into_owned(),
+                        };
+                        let shown =
+                            if lvl.caps == Some(true) { shown.to_uppercase() } else { shown };
+                        let text = self.cv.tidy(&shown);
                         pieces.push(Piece { text, st });
                     }
                 }
@@ -1301,7 +1374,7 @@ impl<'a> Pass<'a> {
         .size;
         // Numbering restarts after any paragraph that is not numbered.
         let marker = match &eff.bullet {
-            Some(Bu::Char(c)) => Some(c.clone()),
+            Some(Bu::Char(c)) => Some(bullet_text(c, eff.bu_font.flatten())),
             Some(Bu::Auto(kind, start)) => {
                 if let Some(slot) = counters.get_mut(level) {
                     *slot = if *slot == 0 { *start } else { slot.saturating_add(1) };
@@ -1320,7 +1393,20 @@ impl<'a> Pass<'a> {
             }
         }
         let first = pieces.iter().find(|pc| pc.text != "\n").map(|pc| pc.st.clone());
-        let bullet = marker.zip(first).map(|(m, st)| Piece { text: m, st });
+        let bullet = marker.zip(first).map(|(m, mut st)| {
+            if let Some(c) = eff.bu_color {
+                st.color = c;
+            }
+            if let Some(pts) = eff.bu_pts {
+                st.size = pts;
+            } else if let Some(k) = eff.bu_pct {
+                st.size *= k;
+            }
+            st.underline = false;
+            st.strike = false;
+            st.shift = 0;
+            Piece { text: m, st }
+        });
         let size_hint = first_size(&pieces).unwrap_or(end_size);
         let to_pts = |s: Option<Sp>| match s {
             Some(Sp::Pct(k)) => k * size_hint * 1.2,
@@ -1329,7 +1415,11 @@ impl<'a> Pass<'a> {
         };
         Para {
             pieces,
-            align: eff.algn.unwrap_or_default(),
+            // A right-to-left paragraph starts at the right edge unless it says otherwise.
+            align: match (eff.algn, eff.rtl) {
+                (None, Some(true)) => Align::End,
+                (a, _) => a.unwrap_or_default(),
+            },
             left: eff.mar_l.unwrap_or(0.0),
             indent: eff.indent.unwrap_or(0.0),
             bullet,
@@ -1595,15 +1685,30 @@ impl<'a> Pass<'a> {
                 self.text_body(&chain, "tbl", None, Some(&extra))
             });
             let mut body = body;
+            let mut sideways = false;
             let laid = match body.as_mut() {
                 Some(b) => {
                     b.ins = mar;
                     b.anchor = anchor;
-                    layout(b, width, self.cv)
+                    b.flow = match tcpr.and_then(|p| p.attr("vert")).map(str::trim) {
+                        Some("vert" | "eaVert" | "mongolianVert" | "wordArtVertRtl") => Flow::Down,
+                        Some("vert270") => Flow::Up,
+                        Some("wordArtVert") => Flow::Stacked,
+                        _ => Flow::Horizontal,
+                    };
+                    if b.flow == Flow::Stacked {
+                        super::stack_letters(b);
+                    }
+                    sideways = b.flow.sideways();
+                    // Sideways lines run along the height the rows state; such a cell does not
+                    // make its row grow.
+                    let along: f64 =
+                        if sideways { row_h.iter().skip(ri).take(rspan).sum() } else { width };
+                    layout(b, along, self.cv)
                 }
                 None => super::Laid::default(),
             };
-            if rspan == 1 {
+            if rspan == 1 && !sideways {
                 let need = laid.height + mar[1] + mar[3];
                 if let Some(h) = row_h.get_mut(ri) {
                     *h = h.max(need.min(5_000.0));
@@ -1644,6 +1749,7 @@ impl<'a> Pass<'a> {
                 anchor: Anchor::Top,
                 wrap: true,
                 scale: 1.0,
+                flow: Flow::Horizontal,
             });
             draws.push(CellDraw {
                 rect: [x0, y0, x1 - x0, y1 - y0],

@@ -87,6 +87,10 @@ pub struct ScanPolicy {
     pub max_findings: usize,
     /// Maximum number of PDF streams decompressed.
     pub max_pdf_streams: usize,
+    /// The file is the container of an encrypted package whose content has been decrypted and
+    /// is scanned on its own (see [`XRayReport::absorb_container`]): the encryption itself is
+    /// then not a gap in the coverage, while everything else in the container is still looked at.
+    pub package_opened: bool,
 }
 
 impl Default for ScanPolicy {
@@ -102,6 +106,7 @@ impl Default for ScanPolicy {
             max_macro_source_bytes: 1 << 20,
             max_findings: 5_000,
             max_pdf_streams: 4_096,
+            package_opened: false,
         }
     }
 }

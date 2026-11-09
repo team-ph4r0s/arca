@@ -137,6 +137,11 @@ struct SlideHandler {
     run_href: String,
     in_t: bool,
     in_run: bool,
+    /// The symbol font of the paragraph's bullet (`a:buFont`), read before its character.
+    bu_font: Option<crate::symbols::SymbolFont>,
+    /// The symbol fonts of the run: its Latin typeface, and the one `a:sym` names.
+    run_latin_sym: Option<crate::symbols::SymbolFont>,
+    run_sym: Option<crate::symbols::SymbolFont>,
     autonum: [u32; 10],
     tables: Vec<TblState>,
     // Picture state.
@@ -163,6 +168,9 @@ impl SlideHandler {
             run_href: String::new(),
             in_t: false,
             in_run: false,
+            bu_font: None,
+            run_latin_sym: None,
+            run_sym: None,
             autonum: [0; 10],
             tables: Vec::new(),
             pic: None,
@@ -383,7 +391,13 @@ impl Handler for SlideHandler {
                 self.in_tx = true;
             }
             // PresentationML has no `p:p`; this is always the DrawingML paragraph.
-            "p" if self.in_tx => self.para = Some(ParaAcc::default()),
+            "p" if self.in_tx => {
+                self.para = Some(ParaAcc::default());
+                self.bu_font = None;
+            }
+            "buFont" if self.para.is_some() => {
+                self.bu_font = tag.attr("typeface").and_then(|f| crate::symbols::symbol_font(&f));
+            }
             "pPr" => {
                 if let Some(p) = self.para.as_mut() {
                     p.level = tag.attr("lvl").and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -403,8 +417,12 @@ impl Handler for SlideHandler {
             "buChar" => {
                 if let Some(p) = self.para.as_mut() {
                     let c = tag.attr("char").unwrap_or_default();
-                    // Symbol-font code points render as boxes; use a neutral bullet.
-                    let c = c.chars().next().filter(|c| !('\u{E000}'..='\u{F8FF}').contains(c));
+                    // A symbol-font code is shown as the character it looks like; a private-use
+                    // code of an unknown font would render as a box, so it is a neutral bullet.
+                    let c = match (c.chars().next(), self.bu_font) {
+                        (Some(c), Some(font)) => Some(crate::symbols::map_char(font, c)),
+                        (c, _) => c.filter(|c| !('\u{E000}'..='\u{F8FF}').contains(c)),
+                    };
                     p.bullet = Bullet::Char(c.map_or_else(|| "•".to_owned(), String::from));
                 }
             }
@@ -416,6 +434,8 @@ impl Handler for SlideHandler {
             "r" | "fld" if self.para.is_some() => {
                 self.in_run = true;
                 self.run_style = 0;
+                self.run_latin_sym = None;
+                self.run_sym = None;
                 self.run_href.clear();
             }
             "rPr" if self.in_run => {
@@ -438,6 +458,18 @@ impl Handler for SlideHandler {
                         self.run_style |= style::SUB;
                     }
                 }
+            }
+            "sym" if self.in_run => {
+                self.run_sym = tag.attr("typeface").and_then(|f| crate::symbols::symbol_font(&f));
+            }
+            "latin"
+                if self.in_run
+                    && tag
+                        .attr("typeface")
+                        .is_some_and(|f| crate::symbols::symbol_font(&f).is_some()) =>
+            {
+                self.run_latin_sym =
+                    tag.attr("typeface").and_then(|f| crate::symbols::symbol_font(&f));
             }
             "latin" | "ea" | "cs" if self.in_run => {
                 if tag.attr("typeface").is_some_and(|f| {
@@ -537,7 +569,11 @@ impl Handler for SlideHandler {
     fn text(&mut self, raw: &str, cdata: bool) -> Result<(), XmlError> {
         if self.in_t && self.para.is_some() {
             let s = if cdata { std::borrow::Cow::Borrowed(raw) } else { unescape(raw)? };
-            self.add_text(&s);
+            let shown = match self.run_latin_sym {
+                Some(font) => std::borrow::Cow::Owned(crate::symbols::map_text(font, &s)),
+                None => crate::symbols::map_private(&s, self.run_sym),
+            };
+            self.add_text(&shown);
         }
         Ok(())
     }

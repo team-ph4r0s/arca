@@ -54,6 +54,7 @@ mod rtf;
 pub mod sheet_draw;
 pub mod sink;
 mod slide_draw;
+mod symbols;
 mod visio_draw;
 mod vsd;
 mod vsdx;

@@ -185,6 +185,10 @@ threat_kinds! {
     // ---- encryption -------------------------------------------------------
     EncryptedDocument = 500 => (Encryption, Medium),
     EncryptedMember = 501 => (Encryption, Medium),
+    // Encrypted with a password the office suite applies by itself: the file opens there without
+    // a question while a scanner that does not know the password sees nothing (the content was
+    // decrypted and inspected here).
+    DefaultPassword = 502 => (Encryption, Medium),
 }
 
 /// One observation of the X-ray.
@@ -777,6 +781,68 @@ impl XRayReport {
     #[must_use]
     pub fn meta(&self, key: MetaKey) -> Option<&str> {
         self.metadata.iter().find(|m| m.key == key).map(|m| m.value.as_str())
+    }
+
+    /// Adds a finding after the scan, keeping the most severe first. The verdict is not
+    /// changed: this is for notes about how the file was opened, not for threats.
+    pub fn note(&mut self, kind: ThreatKind, location: &str, detail: &str) {
+        let severity = kind.default_severity();
+        let at =
+            self.findings.iter().position(|f| f.severity < severity).unwrap_or(self.findings.len());
+        self.findings.insert(
+            at,
+            Finding {
+                kind,
+                severity,
+                location: location.to_owned(),
+                detail: detail.to_owned(),
+                neutralized: false,
+            },
+        );
+    }
+
+    /// Takes in the X-ray of the container this report's content was decrypted out of.
+    ///
+    /// An encrypted package is a compound file with two streams that matter; anything else an
+    /// attacker put next to them (macros, embedded objects, another document for a different
+    /// reader) is invisible in the decrypted content. Its findings are added here, marked with
+    /// where they are, and the verdict becomes the worse of the two.
+    pub fn absorb_container(&mut self, outer: Self, max_findings: usize) {
+        const WHERE: &str = "encrypted container";
+        let mark = |location: String| {
+            if location.is_empty() { WHERE.to_owned() } else { format!("{WHERE}: {location}") }
+        };
+        for mut f in outer.findings {
+            if self.findings.len() >= max_findings {
+                break;
+            }
+            f.location = mark(f.location);
+            self.findings.push(f);
+        }
+        self.findings.sort_by_key(|f| std::cmp::Reverse(f.severity));
+        self.macros.extend(outer.macros);
+        self.external_refs.extend(outer.external_refs);
+        self.embedded.extend(outer.embedded);
+        if outer.verdict.rank() > self.verdict.rank() {
+            self.verdict = outer.verdict;
+            if outer.verdict == Verdict::Rejected {
+                self.rejection = mark(outer.rejection);
+            }
+        }
+    }
+}
+
+impl Verdict {
+    /// The precedence of the verdict when several apply: the higher wins.
+    #[must_use]
+    pub const fn rank(self) -> u8 {
+        match self {
+            Self::Clean => 0,
+            Self::HiddenTrackers => 1,
+            Self::Unverified => 2,
+            Self::ActiveContentNeutralized => 3,
+            Self::Rejected => 4,
+        }
     }
 }
 

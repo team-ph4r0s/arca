@@ -349,6 +349,11 @@ impl Draw<'_, '_> {
             anchor,
             wrap: shape.get("fo:wrap-option").map(String::as_str) != Some("no-wrap"),
             scale: 1.0,
+            flow: match shape.get("style:writing-mode").map(String::as_str) {
+                Some("tb-rl" | "tb") => super::Flow::Down,
+                Some("tb-lr") => super::Flow::Up,
+                _ => super::Flow::Horizontal,
+            },
         };
         let mut counters = [0u32; 10];
         self.collect(container, &base, shape, None, &mut counters, &mut body.paras, 0);
@@ -768,8 +773,7 @@ impl Draw<'_, '_> {
 
     fn text(&mut self, container: &Node, props: &Props, m: &Mat, w: f64, h: f64) {
         let Some(tb) = self.text_body(container, props) else { return };
-        let angle = m.b.atan2(m.a);
-        let (mt, tw, th) = text_frame(m, w, h, angle);
+        let (mt, tw, th) = text_frame(m, w, h, m.text_angle(), tb.flow);
         let laid = layout(&tb, tw, self.cv);
         draw_laid(self.cv, &tb, &laid, tw, th, &mt);
     }
@@ -1117,6 +1121,7 @@ impl Draw<'_, '_> {
                 anchor: Anchor::Top,
                 wrap: true,
                 scale: 1.0,
+                flow: super::Flow::Horizontal,
             });
             draws.push(CellDraw {
                 rect: [x0, y0, x1 - x0, y1 - y0],
@@ -1140,12 +1145,12 @@ fn props_valign(p: &Props) -> Anchor {
 
 /// The frame text is laid out in, as in the presentation drawing: its size on the page and the
 /// transform from it to the page.
-fn text_frame(m: &Mat, w: f64, h: f64, angle: f64) -> (Mat, f64, f64) {
+fn text_frame(m: &Mat, w: f64, h: f64, angle: f64, flow: super::Flow) -> (Mat, f64, f64) {
     let c = m.apply(w / 2.0, h / 2.0);
     let (sx, sy) = m.axis_scales();
-    let (tw, th) = (w * sx, h * sy);
+    let (tw, th) = if flow.sideways() { (h * sy, w * sx) } else { (w * sx, h * sy) };
     let mt = Mat::translate(-tw / 2.0, -th / 2.0)
-        .then(Mat::rotate(angle))
+        .then(Mat::rotate(angle + flow.turn()))
         .then(Mat::translate(c.0, c.1));
     (mt, tw, th)
 }

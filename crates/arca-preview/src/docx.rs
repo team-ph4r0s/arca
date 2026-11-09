@@ -1077,12 +1077,18 @@ impl Handler for Walker<'_, '_> {
             }
             "noBreakHyphen" => self.add_text("-"),
             "sym" => {
+                let font = tag.attr("font").and_then(|f| crate::symbols::symbol_font(&f));
                 if let Some(c) = tag
                     .attr("char")
                     .and_then(|h| u32::from_str_radix(h.trim_start_matches("0x"), 16).ok())
                     .and_then(char::from_u32)
-                    // Symbol-font code points are private-use glyphs; show a neutral bullet.
-                    .map(|c| if ('\u{F000}'..='\u{F8FF}').contains(&c) { '•' } else { c })
+                    // The character the glyph of the named symbol font looks like; a private-use
+                    // code of a font that is not known is a neutral bullet.
+                    .map(|c| match font {
+                        Some(f) => crate::symbols::map_char(f, c),
+                        None if ('\u{F000}'..='\u{F8FF}').contains(&c) => '•',
+                        None => c,
+                    })
                 {
                     self.add_text(&c.to_string());
                 }

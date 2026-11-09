@@ -114,6 +114,15 @@ impl Mat {
         (x * self.a + y * self.c + self.e, x * self.b + y * self.d + self.f)
     }
 
+    /// The direction of text lines under this transform, in radians. Text is never mirrored: a
+    /// horizontal flip leaves it upright and a vertical one turns it upside down, as the office
+    /// suites draw it, so the direction follows the image of the y axis (for a pure rotation this
+    /// is the rotation itself).
+    pub(super) fn text_angle(self) -> f64 {
+        let angle = (-self.c).atan2(self.d);
+        if angle.is_finite() { angle } else { 0.0 }
+    }
+
     /// Length of the image of the x axis and of the y axis.
     pub(super) fn axis_scales(self) -> (f64, f64) {
         (self.a.hypot(self.b), self.c.hypot(self.d))
@@ -329,6 +338,67 @@ pub(super) enum Anchor {
     Bottom,
 }
 
+/// The direction of the lines of a text body in its frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum Flow {
+    /// Left to right, lines going down.
+    #[default]
+    Horizontal,
+    /// Turned a quarter clockwise: lines read top to bottom.
+    Down,
+    /// Turned a quarter anticlockwise: lines read bottom to top.
+    Up,
+    /// Upright letters one under another.
+    Stacked,
+}
+
+impl Flow {
+    /// The turn of the frame the lines are laid out in, in radians.
+    pub(super) const fn turn(self) -> f64 {
+        match self {
+            Self::Horizontal | Self::Stacked => 0.0,
+            Self::Down => std::f64::consts::FRAC_PI_2,
+            Self::Up => -std::f64::consts::FRAC_PI_2,
+        }
+    }
+
+    /// Whether the frame of the lines is the shape's frame turned on its side.
+    pub(super) const fn sideways(self) -> bool {
+        matches!(self, Self::Down | Self::Up)
+    }
+}
+
+/// Most letters of a body that is written one letter under another.
+const MAX_STACKED: usize = 2_000;
+
+/// Rewrites a body so that every letter stands on a line of its own (stacked text).
+pub(super) fn stack_letters(tb: &mut TextBody) {
+    let mut left = MAX_STACKED;
+    for p in &mut tb.paras {
+        let mut out: Vec<Piece> = Vec::new();
+        for piece in &p.pieces {
+            if piece.text == "\n" {
+                continue;
+            }
+            for c in piece.text.chars().filter(|c| !c.is_whitespace()) {
+                if left == 0 {
+                    break;
+                }
+                left -= 1;
+                if !out.is_empty() {
+                    out.push(Piece { text: "\n".to_owned(), st: piece.st.clone() });
+                }
+                out.push(Piece { text: c.to_string(), st: piece.st.clone() });
+            }
+        }
+        p.pieces = out;
+        p.align = Align::Center;
+        p.bullet = None;
+        p.left = 0.0;
+        p.indent = 0.0;
+    }
+}
+
 /// How a run looks.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct RunStyle {
@@ -403,6 +473,8 @@ pub(super) struct TextBody {
     pub(super) wrap: bool,
     /// Factor applied to every size (normal autofit's font scale).
     pub(super) scale: f64,
+    /// How the lines run in the frame.
+    pub(super) flow: Flow,
 }
 
 // Advance widths (1/1000 em) of the standard fonts the PDF text path also uses when a font brings
@@ -908,7 +980,7 @@ pub(super) fn draw_cells(cv: &mut Canvas, cells: &[CellDraw], base: &Mat) {
             }
         }
     }
-    let angle = base.b.atan2(base.a);
+    let angle = base.text_angle();
     for c in cells {
         if c.laid.paras.is_empty() {
             continue;
@@ -916,9 +988,10 @@ pub(super) fn draw_cells(cv: &mut Canvas, cells: &[CellDraw], base: &Mat) {
         let [x, y, w, h] = c.rect;
         let ctr = base.apply(x + w / 2.0, y + h / 2.0);
         let (sx, sy) = base.axis_scales();
-        let (tw, th) = (w * sx, h * sy);
+        let flow = c.body.flow;
+        let (tw, th) = if flow.sideways() { (h * sy, w * sx) } else { (w * sx, h * sy) };
         let mt = Mat::translate(-tw / 2.0, -th / 2.0)
-            .then(Mat::rotate(angle))
+            .then(Mat::rotate(angle + flow.turn()))
             .then(Mat::translate(ctr.0, ctr.1));
         draw_laid(cv, &c.body, &c.laid, tw, th, &mt);
     }

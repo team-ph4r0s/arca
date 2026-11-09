@@ -461,6 +461,23 @@ fn presets_stay_inside_their_frames_and_unknown_ones_are_outlined() {
         "flowChartProcess",
         "flowChartDecision",
         "flowChartTerminator",
+        "round1Rect",
+        "round2SameRect",
+        "round2DiagRect",
+        "snip1Rect",
+        "snip2SameRect",
+        "snip2DiagRect",
+        "leftRightArrow",
+        "upDownArrow",
+        "star4",
+        "star8",
+        "star32",
+        "heptagon",
+        "dodecagon",
+        "flowChartExtract",
+        "flowChartMerge",
+        "flowChartCollate",
+        "flowChartManualInput",
     ];
     let body: String = names.iter().map(|n| sp(100.0, 100.0, 300.0, 200.0, n, RED, "")).collect();
     let r = noted(&Deck::new(&[&body]).build(&[]), 0);
@@ -468,15 +485,88 @@ fn presets_stay_inside_their_frames_and_unknown_ones_are_outlined() {
     let (x0, y0, x1, y1) = bounds(&r.page);
     assert!(x0 >= 99.99 && y0 >= 99.99 && x1 <= 400.01 && y1 <= 300.01, "{x0} {y0} {x1} {y1}");
 
-    let odd = sp(100.0, 100.0, 300.0, 200.0, "cloudCallout", RED, "");
+    // A rough likeness says so and stays inside the frame.
+    for name in ["cloudCallout", "heart", "wave", "bentArrow", "bracePair", "gear6"] {
+        let r = noted(&Deck::new(&[&sp(100.0, 100.0, 300.0, 200.0, name, RED, "")]).build(&[]), 0);
+        assert!(r.page.approximate, "{name}");
+        let (x0, y0, x1, y1) = bounds(&r.page);
+        assert!(x0 >= 99.99 && y0 >= 99.99 && x1 <= 400.01 && y1 <= 300.01, "{name}");
+    }
+
+    // A shape this table has never heard of keeps its fill (light text on a dark shape must stay
+    // readable) and says the page is approximate...
+    let odd = sp(100.0, 100.0, 300.0, 200.0, "shapeOfTheFuture", RED, "");
     let r = noted(&Deck::new(&[&odd]).build(&[]), 0);
     assert!(r.page.approximate);
     let p = &paths(&r.page);
     assert_eq!(p.len(), 1);
-    // The frame is outlined, not filled.
+    assert_eq!(p[0].0, 0xFFFF_0000);
+    assert_eq!(p[0].2.len(), 4);
+    // ...unless its name says it is a line, which encloses nothing.
+    let odd = sp(100.0, 100.0, 300.0, 200.0, "futureConnector9", RED, "");
+    let p = &paths(&render(&Deck::new(&[&odd]).build(&[]), 0));
+    assert_eq!(p.len(), 1);
     assert_eq!(p[0].0, 0);
     assert_ne!(p[0].1, 0);
-    assert_eq!(p[0].2.len(), 4);
+}
+
+#[test]
+fn text_sits_inside_the_body_of_a_preset_shape() {
+    let text = |p: &PageModel| texts(p).first().map(|t| (t.1, t.2)).unwrap_or_default();
+    let at = |prst: &str| {
+        text(&render(
+            &Deck::new(&[&sp(100.0, 100.0, 400.0, 200.0, prst, RED, &para("Текст"))]).build(&[]),
+            0,
+        ))
+    };
+    let (rect_x, rect_y) = at("rect");
+    // In an ellipse, a diamond and a chevron the first line starts well inside the frame.
+    for prst in ["ellipse", "diamond", "chevron", "leftArrow", "hexagon"] {
+        let (x, _) = at(prst);
+        assert!(x > rect_x + 20.0, "{prst}: {x} vs {rect_x}");
+    }
+    for prst in ["ellipse", "diamond", "rightArrow", "triangle"] {
+        let (_, y) = at(prst);
+        assert!(y > rect_y + 20.0, "{prst}: {y} vs {rect_y}");
+    }
+    // A flipped arrow has its text rectangle flipped with it.
+    let flipped = sp(100.0, 100.0, 400.0, 200.0, "leftArrow", RED, &para("Текст"))
+        .replace("<a:xfrm>", r#"<a:xfrm flipH="1">"#);
+    let (x, _) = text(&render(&Deck::new(&[&flipped]).build(&[]), 0));
+    assert!((x - rect_x).abs() < 12.0, "{x} vs {rect_x}");
+}
+
+#[test]
+fn sideways_cells_of_a_table_run_along_the_row_height() {
+    let cell = |text: &str, pr: &str| {
+        format!(
+            r#"<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="1200"/><a:t>{text}</a:t></a:r></a:p></a:txBody><a:tcPr {pr}/></a:tc>"#
+        )
+    };
+    let tbl = format!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="T"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr/><a:tblGrid><a:gridCol w="{}"/><a:gridCol w="{}"/></a:tblGrid><a:tr h="{}">{}{}</a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+        e(50.0),
+        e(50.0),
+        e(340.0),
+        e(160.0),
+        e(40.0),
+        e(300.0),
+        e(160.0),
+        cell("Показатель качества", r#"vert="vert270""#),
+        cell("обычная ячейка", ""),
+    );
+    let page = render(&Deck::new(&[&tbl]).build(&[]), 0);
+    let t = angled(&page);
+    let side = t.iter().find(|t| t.0.contains("Показатель")).unwrap_or_else(|| panic!("{t:?}"));
+    // One line, bottom to top, not a column of syllables.
+    assert_eq!(side.0, "Показатель качества");
+    assert!((side.1 + std::f32::consts::FRAC_PI_2).abs() < 0.01, "{}", side.1);
+    let plain = t.iter().find(|t| t.0.contains("обычная")).unwrap_or_else(|| panic!("{t:?}"));
+    assert!(plain.1.abs() < 0.01);
+    // The sideways cell did not make its row any taller than the table says.
+    let (_, _, _, y1) = bounds(&page);
+    assert!(y1 <= 50.0 + 160.0 + 0.5, "{y1}");
+    assert_sane(&page);
 }
 
 // ---- colours and styles --------------------------------------------------------------------
@@ -1536,4 +1626,129 @@ fn zip_member(pkg: &[u8], name: &str) -> Vec<u8> {
     let mut budget = arca_container::InflateBudget::new(1 << 28, 1000, 16 << 20);
     let entry = z.entries().iter().find(|e| e.name() == name).unwrap();
     z.read(entry, &mut budget).unwrap()
+}
+
+// ---- 0.8.0: symbol fonts, sideways text, flipped groups ----------------------------------------
+
+/// The text runs of a page as `(text, angle)`.
+fn angled(p: &PageModel) -> Vec<(String, f32)> {
+    p.prims
+        .iter()
+        .filter_map(|pr| match pr {
+            Prim::Text { text, angle, .. } => Some((text.clone(), *angle)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn group_of(child: &str, attrs: &str) -> String {
+    format!(
+        r#"<p:grpSp><p:nvGrpSpPr><p:cNvPr id="3" name="g"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm {attrs}><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/><a:chOff x="0" y="0"/><a:chExt cx="{}" cy="{}"/></a:xfrm></p:grpSpPr>{child}</p:grpSp>"#,
+        e(100.0),
+        e(100.0),
+        e(400.0),
+        e(200.0),
+        e(400.0),
+        e(200.0)
+    )
+}
+
+#[test]
+fn symbol_font_bullets_and_runs_are_shown_as_the_characters_they_look_like() {
+    // The bullets PowerPoint's own templates write, and the arrow autocorrect makes of "-->".
+    let body = concat!(
+        r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buFont typeface="Wingdings"/><a:buChar char="§"/></a:pPr><a:r><a:t>квадрат</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buFont typeface="Wingdings"/><a:buChar char="ü"/></a:pPr><a:r><a:t>галочка</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buFont typeface="Wingdings"/><a:buChar char="Ø"/></a:pPr><a:r><a:t>стрелка</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buFont typeface="Arial"/><a:buChar char="•"/></a:pPr><a:r><a:t>точка</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buChar char="&#xF0A7;"/></a:pPr><a:r><a:t>неизвестный</a:t></a:r></a:p>"#,
+        r#"<a:p><a:r><a:t>было </a:t></a:r><a:r><a:rPr><a:sym typeface="Wingdings"/></a:rPr><a:t>&#xF0E0;</a:t></a:r><a:r><a:t> стало</a:t></a:r></a:p>"#,
+        r#"<a:p><a:r><a:rPr><a:latin typeface="Symbol"/></a:rPr><a:t>abg</a:t></a:r></a:p>"#,
+        r#"<a:p><a:r><a:rPr cap="all"/><a:t>заголовок</a:t></a:r></a:p>"#,
+    );
+    let page = render(&Deck::new(&[&sp(0.0, 0.0, 500.0, 400.0, "rect", "", body)]).build(&[]), 0);
+    let all: Vec<String> = texts(&page).into_iter().map(|t| t.0).collect();
+    for want in ["▪", "✓", "➢", "•", "αβγ", "ЗАГОЛОВОК"] {
+        assert!(all.iter().any(|t| t == want), "{want}: {all:?}");
+    }
+    assert!(all.iter().any(|t| t.contains('→')), "{all:?}");
+    // Nothing of the symbol fonts is left as a Latin letter or a private-use box.
+    for t in &all {
+        assert!(!t.contains(['§', 'ü', 'Ø']), "{t}");
+        assert!(!t.chars().any(|c| ('\u{E000}'..='\u{F8FF}').contains(&c)), "{t:?}");
+    }
+    // The bullet font is inherited from the master when the slide gives only the character.
+    let mut deck = Deck::new(&[&sp(
+        0.0,
+        0.0,
+        500.0,
+        100.0,
+        "rect",
+        "",
+        r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buChar char="q"/></a:pPr><a:r><a:t>пункт</a:t></a:r></a:p>"#,
+    )]);
+    deck.clr_map.push_str(r#"<p:txStyles><p:otherStyle><a:lvl1pPr><a:buFont typeface="Wingdings"/><a:buClr><a:srgbClr val="C00000"/></a:buClr><a:buSzPct val="50000"/></a:lvl1pPr></p:otherStyle></p:txStyles>"#);
+    let t = texts(&render(&deck.build(&[]), 0));
+    let b = t.iter().find(|t| t.0 == "❑").unwrap_or_else(|| panic!("{t:?}"));
+    let x = t.iter().find(|t| t.0 == "пункт").unwrap_or_else(|| panic!("{t:?}"));
+    assert_eq!(b.5, 0xFFC0_0000, "the bullet has its own colour");
+    assert!(near(b.3, f64::from(x.3) * 0.5), "the bullet has its own size: {} {}", b.3, x.3);
+}
+
+#[test]
+fn text_in_a_flipped_group_is_never_mirrored_or_turned_over_by_a_horizontal_flip() {
+    let child = sp(20.0, 20.0, 150.0, 40.0, "rect", RED, &para("Текст"));
+    let pi = std::f32::consts::PI;
+    for (attrs, want) in
+        [("", 0.0_f32), (r#"flipH="1""#, 0.0), (r#"flipV="1""#, pi), (r#"flipH="1" flipV="1""#, pi)]
+    {
+        let page = render(&Deck::new(&[&group_of(&child, attrs)]).build(&[]), 0);
+        let t = angled(&page);
+        assert_eq!(t.len(), 1, "{attrs}: {t:?}");
+        let got = t[0].1.rem_euclid(2.0 * pi);
+        let diff = (got - want).abs().min((got - want - 2.0 * pi).abs());
+        assert!(diff < 0.01, "{attrs}: angle {got}, wanted {want}");
+        assert_sane(&page);
+        // The shape itself is mirrored inside the group: its text follows it.
+        let (tx, _) = texts(&page).first().map(|t| (t.1, t.2)).unwrap_or_default();
+        if attrs.contains("flipH") && !attrs.contains("flipV") {
+            assert!(tx > 300.0, "{attrs}: the text went with the mirrored shape, x = {tx}");
+        } else if attrs.is_empty() {
+            assert!(tx < 300.0, "x = {tx}");
+        }
+    }
+    // A shape's own horizontal flip keeps its text upright as well; its vertical flip turns it.
+    let own = child.replace("<a:xfrm>", r#"<a:xfrm flipH="1">"#);
+    assert!(angled(&render(&Deck::new(&[&own]).build(&[]), 0))[0].1.abs() < 0.01);
+    let own = child.replace("<a:xfrm>", r#"<a:xfrm flipV="1">"#);
+    assert!((angled(&render(&Deck::new(&[&own]).build(&[]), 0))[0].1.abs() - pi).abs() < 0.01);
+}
+
+#[test]
+fn sideways_text_runs_along_the_long_side_and_is_not_broken_letter_by_letter() {
+    let frame = |vert: &str| {
+        sp(40.0, 20.0, 40.0, 400.0, "rect", "", "")
+            .replace("</p:sp>", &format!(
+                r#"<p:txBody><a:bodyPr vert="{vert}"/><a:lstStyle/><a:p><a:r><a:rPr sz="1400"/><a:t>Вертикальный заголовок таблицы</a:t></a:r></a:p></p:txBody></p:sp>"#
+            ))
+    };
+    let half = std::f32::consts::FRAC_PI_2;
+    for (vert, want) in [("vert270", -half), ("vert", half), ("eaVert", half)] {
+        let r = noted(&Deck::new(&[&frame(vert)]).build(&[]), 0);
+        let t = angled(&r.page);
+        // One line along the 400 pt side; drawn horizontally it would be a dozen fragments.
+        assert_eq!(t.len(), 1, "{vert}: {t:?}");
+        assert!((t[0].1 - want).abs() < 0.01, "{vert}: {}", t[0].1);
+        assert!(!r.notes.iter().any(|n| n.contains("vertical")), "{:?}", r.notes);
+        let (_, x, y, ..) = texts(&r.page)[0].clone();
+        assert!((40.0..=80.0).contains(&x), "{vert}: x = {x}");
+        assert!((20.0..=420.0).contains(&y), "{vert}: y = {y}");
+        assert_sane(&r.page);
+    }
+    // Horizontal text in the same narrow frame does wrap (the control).
+    assert!(angled(&render(&Deck::new(&[&frame("horz")]).build(&[]), 0)).len() > 3);
+    // Stacked letters stand upright one under another.
+    let t = texts(&render(&Deck::new(&[&frame("wordArtVert")]).build(&[]), 0));
+    assert!(t.len() > 10 && t.iter().all(|t| t.0.chars().count() == 1), "{t:?}");
+    assert!(t.windows(2).all(|w| w[0].2 < w[1].2), "letters go down the frame");
 }

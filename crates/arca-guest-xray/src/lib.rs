@@ -71,16 +71,33 @@ pub fn process(input: &[u8]) -> (i32, Vec<u8>) {
     };
     // An encrypted document is opened first, here in the sandbox; everything after that is
     // about the decrypted content, exactly as for a document that never was encrypted.
-    let (document, success) = match open_document(req.document, req.password) {
+    let opened = match open_document(req.document, req.password) {
         Ok(opened) => opened,
         Err(refusal) => return refusal,
     };
+    let (document, success) = (opened.bytes, opened.status);
     let (code, envelope) = match req.op {
         Op::Scan => {
-            let mut report = arca_xray::scan(&document, &ScanPolicy::default());
+            let policy = ScanPolicy::default();
+            let mut report = arca_xray::scan(&document, &policy);
             if success != status::OK {
                 // The hash is the one of the file the reader holds, not of the decrypted copy.
                 report.sha256 = arca_digest::sha256(req.document).to_string();
+            }
+            if opened.package {
+                // The decrypted content is not all there is: whatever else sits in the
+                // container next to the encrypted package is inspected too, so that nothing
+                // rides past the scanner behind a password.
+                let outer_policy = ScanPolicy { package_opened: true, ..ScanPolicy::default() };
+                let outer = arca_xray::scan(req.document, &outer_policy);
+                report.absorb_container(outer, policy.max_findings);
+            }
+            if opened.default_password {
+                report.note(
+                    arca_xray::ThreatKind::DefaultPassword,
+                    "EncryptedPackage",
+                    "encrypted with the password Excel applies by itself (\"VelvetSweatshop\"): office software opens the file without asking, and a scanner that does not know the password cannot look inside; the content was decrypted and inspected",
+                );
             }
             seal(PayloadKind::XRayReport, &report, "could not encode the X-ray report")
         }
@@ -98,27 +115,65 @@ fn is_encrypted_pdf(data: &[u8]) -> bool {
         && data.windows(8).any(|w| w == b"/Encrypt")
 }
 
-/// The bytes to work on and the status of a success, or the answer to give instead.
-type Opened<'a> = Result<(std::borrow::Cow<'a, [u8]>, i32), (i32, Vec<u8>)>;
+/// A document ready to be worked on.
+struct OpenedDoc<'a> {
+    /// The bytes to work on: the document itself, or its decrypted content.
+    bytes: std::borrow::Cow<'a, [u8]>,
+    /// The status of a success ([`status::OK`], or how the encryption was opened).
+    status: i32,
+    /// The content came out of an encrypted Office package (a container with other streams).
+    package: bool,
+    /// The package opened with the password office software applies by itself.
+    default_password: bool,
+}
+
+/// The document to work on, or the answer to give instead.
+type Opened<'a> = Result<OpenedDoc<'a>, (i32, Vec<u8>)>;
+
+/// The password Excel encrypts with when a workbook is protected without one being asked for.
+/// Excel tries it silently on opening, so a file encrypted with it opens there with no question,
+/// while its content is hidden from anything that only looks at the bytes: a known way past
+/// scanners. It is tried here for the same reason.
+const DEFAULT_PASSWORD: &[u8] = b"VelvetSweatshop";
 
 /// Opens an encrypted document. A document that is not encrypted passes through untouched.
 fn open_document<'a>(document: &'a [u8], password: &[u8]) -> Opened<'a> {
     use arca_preview::DecryptError;
-    let plain = || Ok((std::borrow::Cow::Borrowed(document), status::OK));
+    let plain = || {
+        Ok(OpenedDoc {
+            bytes: std::borrow::Cow::Borrowed(document),
+            status: status::OK,
+            package: false,
+            default_password: false,
+        })
+    };
     let pdf = is_encrypted_pdf(document);
     let office = !pdf && arca_preview::is_encrypted_package(document);
     if !pdf && !office {
         return plain();
     }
-    // An Office package is never tried without a password; a PDF always is, because many are
-    // locked only against editing.
+    // An Office package without a password from the reader is tried with the built-in one only;
+    // a PDF always is tried, because many are locked only against editing.
     if office && password.is_empty() {
-        return plain();
+        return match arca_preview::decrypt(document, DEFAULT_PASSWORD) {
+            Ok(d) => Ok(OpenedDoc {
+                bytes: std::borrow::Cow::Owned(d.bytes),
+                status: status::OK_UNLOCKED,
+                package: true,
+                default_password: true,
+            }),
+            Err(_) => plain(),
+        };
     }
     match arca_preview::decrypt(document, password) {
         Ok(d) => {
             let code = if d.without_password { status::OK_UNLOCKED } else { status::OK_DECRYPTED };
-            Ok((std::borrow::Cow::Owned(d.bytes), code))
+            Ok(OpenedDoc {
+                bytes: std::borrow::Cow::Owned(d.bytes),
+                status: code,
+                package: office,
+                default_password: false,
+            })
         }
         // A PDF that needs a password and has none yet is reported as it was before.
         Err(DecryptError::WrongPassword) if password.is_empty() => plain(),
@@ -775,6 +830,120 @@ mod tests {
         // A password given for a file that needs none changes nothing.
         let (code, _) = process(&with_password(Op::Preview, 0, "x", &fixture("report.docx")));
         assert_eq!(code, status::OK);
+    }
+
+    #[test]
+    fn the_built_in_password_of_excel_hides_nothing_from_the_scan() {
+        // Excel encrypts with "VelvetSweatshop" by itself and opens such a file without a
+        // question; a scanner that does not try it sees only an encrypted blob.
+        let enc = fixture("enc-default.xlsx");
+        let plain = fixture("sheet.xlsx");
+        let (code, env) = process(&request_for(Op::Scan, 0, &enc));
+        assert_eq!(code, status::OK_UNLOCKED, "opened with no password from the reader");
+        let (kind, payload) = open(&env);
+        let r = decode_report(kind, payload).unwrap();
+        assert_eq!(r.format, FileFormat::Xlsx, "the content was identified, not the container");
+        assert_eq!(r.sha256, arca_digest::sha256(&enc).to_string());
+        let note: Vec<_> = r.of_kind(arca_xray::ThreatKind::DefaultPassword).collect();
+        assert_eq!(note.len(), 1, "{:?}", r.findings);
+        assert!(note[0].detail.contains("VelvetSweatshop"));
+        assert!(!r.has(arca_xray::ThreatKind::EncryptedDocument), "nothing was left unread");
+        // The verdict is the one of the content: the note does not make a clean sheet dirty,
+        // and it does not make a dirty one clean.
+        let direct = arca_xray::scan(&plain, &ScanPolicy::default());
+        assert_eq!(r.verdict, direct.verdict);
+        assert_eq!(r.macros.len(), direct.macros.len());
+        // The preview and the sterile copy work on the content as well.
+        let (code, env) = process(&request_for(Op::Preview, 0, &enc));
+        assert_eq!(code, status::OK_UNLOCKED);
+        let (kind, payload) = open(&env);
+        let (direct_code, direct_env) = process(&request_for(Op::Preview, 0, &plain));
+        assert_eq!(direct_code, status::OK);
+        let (direct_kind, direct_payload) = open(&direct_env);
+        assert_eq!(
+            decode_preview(kind, payload).unwrap().sections.len(),
+            decode_preview(direct_kind, direct_payload).unwrap().sections.len()
+        );
+        let (code, env) = process(&request_for(Op::Sanitize, flags::SANITIZE_ALL, &enc));
+        assert_eq!(code, status::OK_UNLOCKED);
+        let (kind, payload) = open(&env);
+        assert_eq!(decode_sanitized(kind, payload).unwrap().format, FileFormat::Xlsx);
+        // A password the reader types still wins over the built-in one, and a wrong one is wrong.
+        let (code, _) = process(&with_password(Op::Scan, 0, "VelvetSweatshop", &enc));
+        assert_eq!(code, status::OK_DECRYPTED);
+        let (code, _) = process(&with_password(Op::Scan, 0, "nope", &enc));
+        assert_eq!(code, status::WRONG_PASSWORD);
+        // A package with a real password is not opened by the built-in one.
+        let (code, env) = process(&request_for(Op::Scan, 0, &fixture("enc-agile.xlsx")));
+        assert_eq!(code, status::OK);
+        let (kind, payload) = open(&env);
+        let r = decode_report(kind, payload).unwrap();
+        assert_eq!(r.format, FileFormat::EncryptedOoxml);
+        assert_eq!(r.verdict, Verdict::Unverified);
+    }
+
+    #[test]
+    fn nothing_rides_past_the_scan_next_to_an_encrypted_package() {
+        // The container of this package carries, beside the two encryption streams, a Word
+        // stream set with a macro project: invisible in the decrypted content.
+        let enc = fixture("enc-smuggle.docx");
+        let clean = arca_xray::scan(&fixture("report.docx"), &ScanPolicy::default());
+        // Without the password the file is what it always was: unverified at best.
+        let (code, env) = process(&request_for(Op::Scan, 0, &enc));
+        assert_eq!(code, status::OK);
+        let (kind, payload) = open(&env);
+        let closed = decode_report(kind, payload).unwrap();
+        assert_ne!(closed.verdict, Verdict::Clean);
+        assert_ne!(closed.verdict, Verdict::HiddenTrackers);
+        // With it, the decrypted document alone would get the verdict of report.docx...
+        let (code, env) = process(&with_password(Op::Scan, 0, "s3cret", &enc));
+        assert_eq!(code, status::OK_DECRYPTED);
+        let (kind, payload) = open(&env);
+        let r = decode_report(kind, payload).unwrap();
+        assert_eq!(r.format, FileFormat::Docx);
+        // ...but the container is looked at too, and what hides there decides.
+        assert!(r.verdict.rank() > clean.verdict.rank(), "{:?} vs {:?}", r.verdict, clean.verdict);
+        assert_ne!(r.verdict, Verdict::Clean);
+        let outside: Vec<_> =
+            r.findings.iter().filter(|f| f.location.starts_with("encrypted container")).collect();
+        assert!(!outside.is_empty(), "{:?}", r.findings);
+        assert!(r.findings.len() > clean.findings.len());
+        // An honest package has nothing beside the encryption: its verdict is the content's.
+        let (code, env) =
+            process(&with_password(Op::Scan, 0, "пароль-123", &fixture("enc-agile.docx")));
+        assert_eq!(code, status::OK_DECRYPTED);
+        let (kind, payload) = open(&env);
+        let honest = decode_report(kind, payload).unwrap();
+        assert_eq!(honest.verdict, clean.verdict, "{:?}", honest.findings);
+        assert!(
+            honest.findings.iter().all(|f| !f.location.starts_with("encrypted container")),
+            "{:?}",
+            honest.findings
+        );
+    }
+
+    #[test]
+    fn hostile_encryption_headers_are_refused_within_bounds() {
+        // Every single-byte change of the encryption streams of a real package: an error or a
+        // wrong password, never a panic, and never a success with the wrong password.
+        let enc = fixture("enc-default.xlsx");
+        let at = enc.windows(8).position(|w| w == [0x24, 0, 0, 0, 0, 0, 0, 0]).unwrap_or(0x200);
+        for i in (at..(at + 260).min(enc.len())).step_by(3) {
+            for bit in [0x01u8, 0x80] {
+                let mut bad = enc.clone();
+                bad[i] ^= bit;
+                let (code, _) = process(&with_password(Op::Scan, 0, "wrong-password", &bad));
+                assert!(
+                    !status::is_success(code) || code == status::OK,
+                    "offset {i}: a wrong password must not open a damaged package ({code})"
+                );
+            }
+        }
+        // A request whose password slot is as long as it may be.
+        let long = "p".repeat(request::MAX_PASSWORD);
+        let (code, _) = process(&with_password(Op::Scan, 0, &long, &enc));
+        assert_eq!(code, status::WRONG_PASSWORD);
+        assert!(request::prefix(Op::Scan, 0, &vec![b'p'; request::MAX_PASSWORD + 1]).is_none());
     }
 
     #[test]
