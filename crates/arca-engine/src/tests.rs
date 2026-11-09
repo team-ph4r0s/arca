@@ -80,8 +80,18 @@ fn sample_preview() -> Preview {
         rows: (0..3)
             .map(|r| Row {
                 cells: vec![
-                    Cell { span: 2, header: r == 0, paras: vec![para(&format!("r{r}c0"))] },
-                    Cell { span: 1, header: false, paras: vec![para("x"), para("y")] },
+                    Cell {
+                        span: 2,
+                        header: r == 0,
+                        paras: vec![para(&format!("r{r}c0"))],
+                        ..Cell::default()
+                    },
+                    Cell {
+                        span: 1,
+                        header: false,
+                        paras: vec![para("x"), para("y")],
+                        ..Cell::default()
+                    },
                 ],
             })
             .collect(),

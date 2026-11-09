@@ -21,7 +21,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.1"
+version = "0.7.3"
 edition = "2024"
 rust-version = "1.97"
 # Placeholder identity; kept in sync with AUTHORS and arca-attribution (see AUTHORS).
@@ -54,7 +54,7 @@ wasmi_core = { version = "=2.0.0", default-features = false, features = ["std"] 
 # Streaming pull XML parser; DOCTYPE/entities are rejected by arca-container.
 quick-xml = { version = "=0.42.0", default-features = false }
 # DEFLATE; the crate is `#![forbid(unsafe_code)]`.
-miniz_oxide = { version = "=0.9.0", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "=0.9.1", default-features = false, features = ["with-alloc"] }
 # Volatile, non-elidable wiping of document buffers.
 zeroize = { version = "=1.9.1", default-features = false, features = ["alloc"] }
 

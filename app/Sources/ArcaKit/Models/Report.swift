@@ -120,6 +120,8 @@ public struct MacroModule: Codable, Sendable, Equatable, Identifiable {
     public let procs: [String]
     /// What the code does, the most serious first.
     public let behaviors: [MacroBehavior]
+    /// The static explanation behind the "More" button; `nil` from an engine that does not give one.
+    public let explain: MacroExplain?
 
     enum CodingKeys: String, CodingKey {
         case language = "lang"
@@ -133,6 +135,7 @@ public struct MacroModule: Codable, Sendable, Equatable, Identifiable {
         case intent
         case procs
         case behaviors
+        case explain
     }
 
     public init(from decoder: Decoder) throws {
@@ -148,7 +151,38 @@ public struct MacroModule: Codable, Sendable, Equatable, Identifiable {
         intent = try c.decodeIfPresent(String.self, forKey: .intent) ?? "Suspicious"
         procs = try c.decodeIfPresent([String].self, forKey: .procs) ?? []
         behaviors = try c.decodeIfPresent([MacroBehavior].self, forKey: .behaviors) ?? []
+        explain = try c.decodeIfPresent(MacroExplain.self, forKey: .explain)
     }
+}
+
+/// A sentence in both languages, as the engine writes it.
+public struct LocalText: Codable, Sendable, Equatable {
+    public let ru: String
+    public let en: String
+
+    /// The sentence in the reader's language (Russian for a Russian-first device, else English).
+    public var localized: String {
+        let russian = Locale.preferredLanguages.first?.hasPrefix("ru") ?? false
+        return russian ? ru : en
+    }
+}
+
+/// One address, path or call found by the static analysis.
+public struct ExplainIoc: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { "\(kind):\(value)" }
+    /// "Url", "Unc", "Call" or "Other".
+    public let kind: String
+    public let value: String
+}
+
+/// What the "More" button shows for a macro: what it is, a static step-by-step trace (nothing is
+/// executed), the addresses and calls found, and a verdict ("Harmless", "Suspicious", "Hostile").
+public struct MacroExplain: Codable, Sendable, Equatable {
+    public let verdict: String
+    public let title: LocalText
+    public let summary: LocalText
+    public let steps: [LocalText]
+    public let iocs: [ExplainIoc]
 }
 
 /// One thing a macro does: what, in which procedure, and the line of source that shows it.

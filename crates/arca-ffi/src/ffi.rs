@@ -155,18 +155,23 @@ unsafe fn str_from_c_str<'a>(ptr: *const c_char) -> Option<&'a str> {
     cstr.to_str().ok()
 }
 
+/// Takes ownership of `fd`.
+///
+/// # Safety
+///
+/// `fd` must be negative or an open descriptor that nothing else owns or closes afterwards.
 #[cfg(unix)]
-fn file_from_fd(fd: i32) -> Option<File> {
+unsafe fn file_from_fd(fd: i32) -> Option<File> {
     use std::os::fd::FromRawFd;
     if fd < 0 {
         return None;
     }
-    // SAFETY: caller passes ownership of the file descriptor.
+    // SAFETY: the caller hands over the only ownership of the open descriptor.
     Some(unsafe { File::from_raw_fd(fd) })
 }
 
 #[cfg(not(unix))]
-fn file_from_fd(_fd: i32) -> Option<File> {
+unsafe fn file_from_fd(_fd: i32) -> Option<File> {
     None
 }
 
@@ -258,10 +263,16 @@ pub unsafe extern "C" fn arca_doc_read_file(doc: i64, path: *const c_char) -> i6
 /// Reads a POSIX file descriptor to EOF into the document and closes `fd`.
 ///
 /// Returns the number of bytes read or a negative `-status` code.
+///
+/// # Safety
+///
+/// `fd` must be negative or an open descriptor owned by the caller, who must not use or close
+/// it after the call.
 #[unsafe(no_mangle)]
-pub extern "C" fn arca_doc_read_fd(doc: i64, fd: i32) -> i64 {
+pub unsafe extern "C" fn arca_doc_read_fd(doc: i64, fd: i32) -> i64 {
     guard(-i64::from(Status::Fault.code()), || {
-        let Some(mut file) = file_from_fd(fd) else {
+        // SAFETY: the caller hands over ownership of `fd` (see the function's contract).
+        let Some(mut file) = (unsafe { file_from_fd(fd) }) else {
             return -i64::from(Status::BadArgument.code());
         };
         api::doc_read(doc, &mut file)
@@ -434,10 +445,16 @@ pub unsafe extern "C" fn arca_outcome_sanitized_write_file(
 /// Writes the sterile copy to a POSIX file descriptor and closes `fd`.
 ///
 /// Returns byte count written or a negative `-status` code.
+///
+/// # Safety
+///
+/// `fd` must be negative or an open descriptor owned by the caller, who must not use or close
+/// it after the call.
 #[unsafe(no_mangle)]
-pub extern "C" fn arca_outcome_sanitized_write_fd(outcome: i64, fd: i32) -> i64 {
+pub unsafe extern "C" fn arca_outcome_sanitized_write_fd(outcome: i64, fd: i32) -> i64 {
     guard(-i64::from(Status::Fault.code()), || {
-        let Some(mut file) = file_from_fd(fd) else {
+        // SAFETY: the caller hands over ownership of `fd` (see the function's contract).
+        let Some(mut file) = (unsafe { file_from_fd(fd) }) else {
             return -i64::from(Status::BadArgument.code());
         };
         api::sanitized_write(outcome, &mut file)

@@ -343,6 +343,7 @@ fn markdown_lines(
                                     span: 1,
                                     header: first,
                                     paras: vec![b.take(ParaStyle::Body)],
+                                    ..Cell::default()
                                 }
                             })
                             .collect(),

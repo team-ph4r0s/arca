@@ -1971,7 +1971,7 @@ impl<'e, 's, 'p> Walker<'e, 's, 'p> {
         if mark == 0x07 && depth == 1 {
             acc.flush_inner();
             let paras = std::mem::take(&mut acc.paras);
-            acc.cells.push(Cell { span: 1, header: false, paras });
+            acc.cells.push(Cell { span: 1, header: false, paras, ..Cell::default() });
             acc.count = acc.count.saturating_add(1);
         }
         if acc.count > self.sink.items_left() {
@@ -1987,7 +1987,7 @@ impl<'e, 's, 'p> Walker<'e, 's, 'p> {
             acc.flush_inner();
             if !acc.paras.is_empty() {
                 let paras = std::mem::take(&mut acc.paras);
-                acc.cells.push(Cell { span: 1, header: false, paras });
+                acc.cells.push(Cell { span: 1, header: false, paras, ..Cell::default() });
             }
             if !acc.cells.is_empty() {
                 let cells = std::mem::take(&mut acc.cells);

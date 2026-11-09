@@ -1,4 +1,4 @@
-# Arca — архитектура (v0.7.1)
+# Arca — архитектура (v0.7.3)
 
 > Статус: **Фазы 1–4 реализованы для Android и iOS** (архитектура, лицензирование, песочница, рентген
 > угроз, стерилизаторы, безопасный просмотр, `arca-engine`/`arca-jni`, приложение). Фаза 5
@@ -529,7 +529,7 @@ macOS и Xcode 15+. Rust-часть `arca-ffi` входит в общий worksp
 | `wasmi`, `wasmi_core`, `wasmi_ir`, `wasmi_collections` | 2.0.0 | MIT/Apache-2.0 | интерпретатор Wasm |
 | `wasmparser` | 0.228.0 | Apache-2.0 WITH LLVM-exception / Apache-2.0 / MIT | валидация модулей |
 | `quick-xml` | 0.42.0 | MIT | потоковый XML |
-| `miniz_oxide` + `adler2` | 0.9.0 / 2.0.1 | MIT/Zlib/Apache-2.0 | DEFLATE (крейт `forbid(unsafe_code)`) |
+| `miniz_oxide` + `adler2` | 0.9.1 / 2.0.1 | MIT/Zlib/Apache-2.0 | DEFLATE (крейт `forbid(unsafe_code)`) |
 | `zeroize` | 1.9.1 | Apache-2.0/MIT | обнуление памяти (`arca-sandbox`, `arca-engine`, `arca-ffi` и, с раунда 0.2.2, `arca-container` — для ключей AES/RC4; а значит и для Wasm-гостя) |
 | `memchr`, `bitflags`, `spin`, `libm`, `hashbrown`, `indexmap`, `foldhash`, `equivalent`, `string-interner`, `serde_core` | транзитивные (в основном через `wasmi`) | MIT/Unlicense/Apache-2.0/Zlib | — |
 

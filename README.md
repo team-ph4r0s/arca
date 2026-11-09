@@ -11,7 +11,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.97%20%7C%20Edition%202024-e43716?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![WebAssembly](https://img.shields.io/badge/Sandbox-wasmi%20%7C%20Wasm-654ff0?style=flat-square&logo=webassembly)](https://github.com/wasmi-labs/wasmi)
 [![ABI](https://img.shields.io/badge/ABI-v8-blue?style=flat-square)](#)
-[![Version](https://img.shields.io/badge/version-0.7.1-informational?style=flat-square)](docs/releases/v0.7.1.md)
+[![Version](https://img.shields.io/badge/version-0.7.3-informational?style=flat-square)](docs/releases/v0.7.3.md)
 
 [![Android](https://img.shields.io/badge/Android-8--16%20%7C%20API%2026--36-34a853?style=flat-square&logo=android)](docs/ANDROID.md)
 [![iOS](https://img.shields.io/badge/iOS-16%2B%20%7C%20SwiftUI-000000?style=flat-square&logo=apple)](app/README.md)
@@ -40,7 +40,7 @@
   * **Распространение:** подписанный детерминированный APK в GitHub Releases. Публикация в каталогах F-Droid и Google Play запланирована.
   * **Автономность и обновления:** в приложении физически отсутствует сетевой стек (`INTERNET` permission отсутствует в манифесте) и нет самозагрузчиков. Обновление устанавливается вручную поверх существующего приложения при совпадении криптографической подписи релизного ключа.
   * **Проверка качества:** автоматизированные контрактные тесты, фаззинг и полигон вредоносных образцов выполняются в CI (см. [`docs/ANDROID.md`](docs/ANDROID.md)).
-  * **История релизов:** актуальная версия **0.7.1** уточняет iOS JSON-контракт просмотра, сохраняет телеметрию песочницы при навигации и усиливает регрессионные проверки. Подробнее — в [заметках к релизам](docs/releases/).
+  * **История релизов:** актуальная версия **0.7.3** уточняет iOS JSON-контракт просмотра, сохраняет телеметрию песочницы при навигации и усиливает регрессионные проверки. Подробнее — в [заметках к релизам](docs/releases/).
 * **iOS-клиент:** нативный клиент на Swift и SwiftUI (`ArcaKit`, `ArcaCore.xcframework` поверх `crates/arca-ffi`), подробности — в [`app/README.md`](app/README.md) и [`docs/IOS_ARCHITECTURE.md`](docs/IOS_ARCHITECTURE.md).
 
 ---

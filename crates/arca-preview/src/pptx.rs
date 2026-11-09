@@ -378,7 +378,7 @@ impl Handler for SlideHandler {
                     let span = tag.attr("gridSpan").and_then(|v| v.parse().ok()).unwrap_or(1);
                     let merged = tag.attr("hMerge").is_some_and(|v| matches!(&*v, "1" | "true"));
                     t.skip_cell = merged;
-                    t.cell = Some(Cell { span, header: false, paras: Vec::new() });
+                    t.cell = Some(Cell { span, header: false, ..Cell::default() });
                 }
                 self.in_tx = true;
             }

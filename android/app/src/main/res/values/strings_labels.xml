@@ -210,4 +210,10 @@
     <string name="format_gif">GIF picture</string>
     <string name="format_jpeg">JPEG picture</string>
     <string name="format_png">PNG picture</string>
+    <string name="explain_more">More: step-by-step analysis</string>
+    <string name="explain_less">Hide the analysis</string>
+    <string name="explain_part1">1. WHAT IT IS AND WHAT IT CAN LEAD TO</string>
+    <string name="explain_part2">2. STEP BY STEP (NOTHING IS RUN)</string>
+    <string name="explain_part3">3. ADDRESSES, PATHS AND CALLS</string>
+    <string name="explain_part4">4. SOURCE TEXT (PLAIN TEXT)</string>
 </resources>

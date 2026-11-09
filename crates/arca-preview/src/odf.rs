@@ -1289,7 +1289,7 @@ impl<'a, 'p> Odf<'a, 'p> {
             let span = tag.attr("number-columns-spanned").and_then(|v| v.parse().ok()).unwrap_or(1);
             t.covered = covered;
             t.col_rep = rep;
-            t.cell = Some(Cell { span, header: self.header_rows > 0, paras: Vec::new() });
+            t.cell = Some(Cell { span, header: self.header_rows > 0, ..Cell::default() });
         }
     }
 

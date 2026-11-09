@@ -5,7 +5,7 @@
 #   tag v*                       same + ready for release packaging
 #   workflow_dispatch            manual trigger
 #
-# Runs on macos-14 (Apple Silicon M-series runners).
+# Runs on macos-15 (Apple Silicon M-series runners); GitHub no longer provides macos-14.
 # Third-party actions are pinned to full commit SHAs.
 name: ios
 
@@ -52,7 +52,7 @@ env:
 jobs:
   ios-suite:
     name: xcframework · swift tests · app
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,8 +98,30 @@ jobs:
           name: arca-ios-app
           path: |
             target/ios-app/Arca-simulator.app.zip
-            target/ios-app/arca-*.ipa
-            target/ios-app/arca-*.ipa.sha256
+            target/ios-app/Arca-unsigned.ipa
+
+      # The release assets, named after the version: arca-<version>-ios.ipa (Payload/Arca.app, unsigned:
+      # to be signed with the tester's own Apple ID), the Simulator build and the XCFramework, each
+      # with its SHA-256.
+      - name: Name the release assets (tags only)
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          out=target/release-ios
+          rm -rf "$out"; mkdir -p "$out"
+          unzip -l target/ios-app/Arca-unsigned.ipa | grep -q 'Payload/Arca.app/Info.plist'             || { echo "the .ipa has no Payload/Arca.app/Info.plist" >&2; exit 1; }
+          cp target/ios-app/Arca-unsigned.ipa "$out/arca-$ver-ios.ipa"
+          cp target/ios-app/Arca-simulator.app.zip "$out/arca-$ver-ios-simulator.app.zip"
+          cp target/ArcaCore.xcframework.zip "$out/ArcaCore.xcframework.zip"
+          (cd "$out" && for f in arca-"$ver"-ios.ipa arca-"$ver"-ios-simulator.app.zip ArcaCore.xcframework.zip; do
+             shasum -a 256 "$f" > "$f.sha256"; done; ls -l)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: arca-ios-release
+          path: target/release-ios/
+          if-no-files-found: error
 
       # The whole xcodebuild logs and the test result bundle: what to read when a step above failed.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -124,11 +146,7 @@ jobs:
       - name: Download iOS builds from this run
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name arca-ios-app --dir ios-build
-      - name: Download the XCFramework archive
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name ArcaCore.xcframework.zip --dir ios-framework
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name arca-ios-release --dir ios-build
       - name: Attach builds once the Android release exists
         env:
           GH_TOKEN: ${{ github.token }}
@@ -137,7 +155,7 @@ jobs:
           for attempt in $(seq 1 180); do
             if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-                ios-build/arca-*.ipa ios-build/arca-*.ipa.sha256 ios-framework/ArcaCore.xcframework.zip
+                ios-build/*
               exit 0
             fi
             sleep 30

@@ -349,6 +349,7 @@ mod sink_tests {
                 span: 1,
                 header: false,
                 paras: vec![Paragraph::plain("0123456789")],
+                ..Default::default()
             }],
         };
         let table = Table { rows: (0..10).map(|_| row()).collect() };

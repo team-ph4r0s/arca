@@ -15,12 +15,18 @@ use arca_xray::XRayReport;
 use arca_xray::sanitize::SanitizedDocument;
 use libfuzzer_sys::fuzz_target;
 
+/// Two values are the same when they encode to the same bytes: that is bit-exact, so a NaN is the
+/// same NaN (`NaN != NaN` made `assert_eq!` fail on a page whose size the guest left undefined).
+fn same<T: wire::Wire>(a: &T, b: &T) -> bool {
+    wire::to_bytes(a).ok() == wire::to_bytes(b).ok()
+}
+
 fn roundtrip<T: wire::Wire + PartialEq + core::fmt::Debug>(payload: &[u8]) {
     let limits = DecodeLimits::default();
     if let Ok(value) = wire::from_bytes::<T>(payload, limits) {
         let bytes = wire::to_bytes(&value).expect("a decoded value re-encodes");
         let back: T = wire::from_bytes(&bytes, limits).expect("re-encoded bytes decode");
-        assert_eq!(back, value);
+        assert!(same(&back, &value), "a decoded value must survive its own re-encoding");
     }
 }
 
@@ -43,14 +49,15 @@ fn budgeted<T: wire::Wire + PartialEq + core::fmt::Debug>(payload: &[u8]) {
         let r = decode_with::<T>(payload, full, budget);
         if let Some(smaller) = &first_ok {
             // A larger budget cannot refuse what a smaller one accepted, nor change the value.
-            assert_eq!(r.as_ref().ok(), Some(smaller));
+            assert!(r.as_ref().ok().is_some_and(|v| same(v, smaller)));
         } else if let Ok(v) = r {
             first_ok = Some(v);
         }
     }
     let tight = DecodeLimits { max_string_bytes: 256, max_items: 16, max_depth: 4 };
     if let Ok(v) = decode_with::<T>(payload, tight, wire::DEFAULT_TOTAL_BYTES) {
-        assert_eq!(decode_with::<T>(payload, full, wire::DEFAULT_TOTAL_BYTES).ok(), Some(v));
+        let wide = decode_with::<T>(payload, full, wire::DEFAULT_TOTAL_BYTES).ok();
+        assert!(wide.is_some_and(|w| same(&w, &v)));
     }
 }
 

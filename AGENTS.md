@@ -3,14 +3,22 @@
 ## Build environment (do not probe for toolchains)
 
 - The host is Windows with `git.exe`. It has **no** Rust, Cargo, Android SDK/NDK, and **no** `gh` CLI.
-- All compiling, linting, testing and APK packaging happens inside the running Docker container `arca-dev`
-  (image `arca-build3`, repository bind-mounted at `/src`, `CARGO_TARGET_DIR=/target`, SDK in `/opt/android-sdk`,
-  build-tools dir `android-16` so pass `ARCA_BUILD_TOOLS=android-16`, android.jars in `/opt/jars` via `ARCA_ANDROID_JARS=/opt/jars`).
+- All compiling, linting and testing happens inside the Docker container `arca-dev` (from `ubuntu:24.04`,
+  repository bind-mounted at `/src`, `CARGO_TARGET_DIR=/target`, rustup in `/root/.cargo/bin`, which is **not**
+  on the `PATH` of a login shell). Docker Desktop (`%LOCALAPPDATA%\Programs\DockerDesktop`) may be stopped, and
+  the container may be exited: start both first (`docker start arca-dev`).
+- The container has `/opt/android-sdk` with platforms and cmdline-tools, but no build-tools, no android.jars
+  (`/opt/jars`), no `cargo-deny` and no `cargo-audit`: `tools/android/check-android.sh` and APK packaging fail
+  there until those are installed (`ARCA_BUILD_TOOLS=…`, `ARCA_ANDROID_JARS=…`). CI runs them on every push.
 - From Git Bash:
 
   ```bash
-  MSYS_NO_PATHCONV=1 docker exec arca-dev bash -lc 'cd /src && cargo check --workspace'
+  MSYS_NO_PATHCONV=1 docker exec arca-dev bash -c 'export PATH=/root/.cargo/bin:$PATH; cd /src && cargo check --workspace'
   ```
+
+- The malware-lab samples and snapshots (`tests/malware-test/`) describe real exploits, and antivirus software may
+  remove them from the working copy. If a snapshot is missing (or excluded in `.git/info/sparse-checkout`),
+  `tools/check-malware-lab.sh` fails locally only; add an antivirus exclusion for the folder and restore the file.
 
 - `cargo fmt` cannot rewrite files on the bind mount (os error 22): copy `crates/` to `/tmp/fmt` in the container, run
   `cargo fmt --all` there, copy changed files back. `cargo fmt --all --check` works in place.
