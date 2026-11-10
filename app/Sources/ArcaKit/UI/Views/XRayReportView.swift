@@ -98,7 +98,7 @@ public struct XRayReportView: View {
 
             VStack(spacing: 6) {
                 Text(report.verdict.titleRu)
-                    .font(.system(size: 24, weight: .bold))
+                    .font(ArcaTheme.display(24))
                     .foregroundColor(state.theme.textPrimary)
 
                 Text(verdictSubtitle(report.verdict))
@@ -126,10 +126,10 @@ public struct XRayReportView: View {
                     ArcaHaptics.selection()
                 } label: {
                     HStack(spacing: 8) {
-                        ArcaGlyph(.lock, size: 18, color: .white)
+                        ArcaGlyph(.lock, size: 18, color: state.theme.onAccent)
                         Text("Ввести пароль")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(state.theme.onAccent)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -142,10 +142,10 @@ public struct XRayReportView: View {
                 state.proceedToViewer(report: report, diagnostics: diagnostics)
             } label: {
                 HStack(spacing: 8) {
-                    ArcaGlyph(.document, size: 18, color: .white)
+                    ArcaGlyph(.document, size: 18, color: state.theme.onAccent)
                     Text("Безопасный просмотр")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(state.theme.onAccent)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)

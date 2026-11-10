@@ -17,8 +17,13 @@ public enum AppScreen: Sendable, Equatable {
 @MainActor
 public final class AppState: ObservableObject {
     @Published public var currentScreen: AppScreen = .idle
-    @Published public var theme: ArcaTheme = .obsidian
+    /// The palette in force. The choice is kept between launches (its name, nothing else).
+    @Published public var theme: ArcaTheme {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: Self.themeKey) }
+    }
     @Published public var isPasswordPromptVisible: Bool = false
+    /// The last password tried did not open the document (the prompt says so).
+    @Published public private(set) var passwordWasWrong: Bool = false
     @Published public var passwordInput: String = ""
     @Published public var isSanitizeInProgress: Bool = false
     @Published public var sanitizedDocument: SanitizedDocument?
@@ -45,9 +50,13 @@ public final class AppState: ObservableObject {
     private var activeDocumentName: String = ""
     private var pendingDocumentData: Data?
 
+    private static let themeKey = "arca.theme"
+
     public init(engine: ArcaEngine = .shared, patronStore: PatronStore = PatronStore()) {
         self.engine = engine
         self.patronStore = patronStore
+        let stored = UserDefaults.standard.string(forKey: Self.themeKey).flatMap(ArcaTheme.init(rawValue:))
+        self.theme = stored ?? .obsidian
     }
 
     // MARK: - Document Intake
@@ -104,8 +113,13 @@ public final class AppState: ObservableObject {
             )
 
             lastRun = SandboxRun(kind: .scan, diagnostics: result.diagnostics)
+            passwordWasWrong = false
             currentScreen = .report(report: result.report, diagnostics: result.diagnostics)
-        } catch ArcaError.encrypted, ArcaError.wrongPassword {
+        } catch ArcaError.encrypted {
+            passwordWasWrong = false
+            isPasswordPromptVisible = true
+        } catch ArcaError.wrongPassword {
+            passwordWasWrong = true
             isPasswordPromptVisible = true
         }
     }
@@ -254,6 +268,8 @@ public final class AppState: ObservableObject {
         sanitizedDocument = nil
         inspectedImage = nil
         inspectedMacro = nil
+        passwordInput = ""
+        passwordWasWrong = false
         currentScreen = .idle
         ArcaHaptics.selection()
     }

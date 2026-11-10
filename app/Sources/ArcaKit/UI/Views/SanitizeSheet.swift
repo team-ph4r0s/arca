@@ -47,7 +47,7 @@ public struct SanitizeSheet: View {
 
                     VStack(spacing: 6) {
                         Text("Стерильная копия создана")
-                            .font(.system(size: 22, weight: .bold))
+                            .font(ArcaTheme.display(22))
                             .foregroundColor(state.theme.textPrimary)
 
                         Text("Копия пересобрана заново и повторно проверена рентгеном: макросы, связи и метаданные удалены.")

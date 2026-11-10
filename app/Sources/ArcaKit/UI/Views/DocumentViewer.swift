@@ -119,7 +119,53 @@ public struct DocumentViewer: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
         .background(state.theme.surface)
-        .onChange(of: mode) { _ in ArcaHaptics.selection() }
+        .onChange(of: mode) { _ in
+            ArcaHaptics.selection()
+            loadMoreTablesIfNeeded()
+        }
+    }
+
+    /// "Tables" shows only the rows of tables: when the part loaded so far holds few of them,
+    /// more is loaded, so that a table further down the document is not reported as missing.
+    private func loadMoreTablesIfNeeded() {
+        if mode == .tables, visibleItems.count < 24 {
+            loadMoreItems()
+        }
+    }
+
+    /// The section is a sheet: rows of cells that keep their columns and scroll sideways.
+    private var sectionIsGrid: Bool {
+        items.contains {
+            switch $0 {
+            case .gridHeader, .gridRow: return true
+            default: return false
+            }
+        }
+    }
+
+    /// The widths of the columns of the sheet (from its header), in points.
+    private var gridWidths: [CGFloat] {
+        for item in items {
+            if case .gridHeader(let gh) = item {
+                let count = min(max(gh.cols, 0), 512)
+                return (0..<count).map { col in
+                    let chars = col < gh.widths.count ? gh.widths[col] : 8
+                    return min(320, max(56, CGFloat(chars) * 8))
+                }
+            }
+        }
+        return []
+    }
+
+    /// The letters of a column, as a spreadsheet names it: A, B, ..., Z, AA.
+    static func columnName(_ index: Int) -> String {
+        var n = max(0, index)
+        var name = ""
+        repeat {
+            name = String(UnicodeScalar(UInt8(65 + n % 26))) + name
+            n = n / 26 - 1
+        } while n >= 0
+        return name
     }
 
     /// The items to show: in "Tables" mode only the table and grid rows.
@@ -134,8 +180,10 @@ public struct DocumentViewer: View {
     }
 
     private var textContent: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
+        // A sheet scrolls both ways (its rows are not squeezed into the width of the screen);
+        // text wraps to the width and scrolls down only.
+        ScrollView(sectionIsGrid ? [.vertical, .horizontal] : [.vertical]) {
+            LazyVStack(alignment: .leading, spacing: sectionIsGrid ? 4 : 14) {
                 if mode == .tables, visibleItems.isEmpty, !isLoadingItems {
                     Text("В этом разделе нет таблиц.")
                         .font(.system(size: 13))
@@ -180,10 +228,12 @@ public struct DocumentViewer: View {
                         HStack(spacing: 6) {
                             Text(section.name.isEmpty ? "\(section.kind) \(index + 1)" : section.name)
                                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                                .foregroundColor(isSelected ? .white : state.theme.textPrimary)
+                                .foregroundColor(isSelected ? state.theme.onAccent : state.theme.textPrimary)
 
                             if section.isHidden {
-                                ArcaGlyph(.lock, size: 10, color: isSelected ? .white : state.theme.textSecondary)
+                                ArcaGlyph(
+                                    .lock, size: 10,
+                                    color: isSelected ? state.theme.onAccent : state.theme.textSecondary)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -242,6 +292,8 @@ public struct DocumentViewer: View {
                 .foregroundColor(textColor ?? state.theme.textPrimary)
                 .multilineTextAlignment(alignmentForAlign(para.align))
                 .lineSpacing(4)
+                // A one-line paragraph is aligned by its frame, not by the alignment of its lines.
+                .frame(maxWidth: .infinity, alignment: frameAlignment(para.align))
         }
         .padding(.leading, CGFloat(para.level * 16))
     }
@@ -250,11 +302,14 @@ public struct DocumentViewer: View {
         var result = AttributedString()
         for run in para.runs {
             var str = AttributedString(run.text)
-            if run.style.contains(.bold) { str.inlinePresentationIntent?.insert(.stronglyEmphasized) }
-            if run.style.contains(.italic) { str.inlinePresentationIntent?.insert(.emphasized) }
+            // The intent of a fresh string is nil: it is built and set, not inserted into.
+            var intent = InlinePresentationIntent()
+            if run.style.contains(.bold) { intent.insert(.stronglyEmphasized) }
+            if run.style.contains(.italic) { intent.insert(.emphasized) }
+            if run.style.contains(.mono) { intent.insert(.code) }
+            if !intent.isEmpty { str.inlinePresentationIntent = intent }
             if run.style.contains(.underline) { str.underlineStyle = .single }
             if run.style.contains(.strike) { str.strikethroughStyle = .single }
-            if run.style.contains(.mono) { str.inlinePresentationIntent?.insert(.code) }
             if run.style.contains(.super) { str.baselineOffset = 5 }
             if run.style.contains(.sub) { str.baselineOffset = -3 }
             if let foreground = run.foregroundColor {
@@ -323,34 +378,58 @@ public struct DocumentViewer: View {
             blue: Double(cell.fill & 0xff) / 255)
     }
 
+    /// Width of the column that holds the numbers of the rows.
+    private static let rowNumberWidth: CGFloat = 44
+
     private func renderGridHeader(_ gh: GridHeader) -> some View {
-        HStack(spacing: 4) {
-            ForEach(0..<gh.cols, id: \.self) { colIndex in
-                let w = colIndex < gh.widths.count ? CGFloat(gh.widths[colIndex] * 8) : 60
-                Text("COL \(colIndex + 1)")
+        let widths = gridWidths
+        return HStack(spacing: 4) {
+            Text("")
+                .frame(width: Self.rowNumberWidth)
+            ForEach(Array(widths.enumerated()), id: \.offset) { colIndex, width in
+                Text(Self.columnName(colIndex))
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(state.theme.textSecondary)
-                    .frame(width: max(50, w), alignment: .leading)
+                    .frame(width: width + 12, alignment: .center)
                     .padding(.vertical, 6)
             }
         }
-        .padding(.horizontal, 4)
         .background(state.theme.surfaceSecondary)
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
+    /// A row of a sheet. Only the cells that hold something are sent, each with its column, so
+    /// every column of the sheet gets its place and an empty one stays empty (cells are never
+    /// shifted to the left).
     private func renderGridRow(_ gr: GridRow) -> some View {
-        HStack(spacing: 4) {
-            ForEach(gr.cells, id: \.column) { cell in
-                Text(cell.text)
-                    .font(.system(size: 12, weight: .regular, design: cell.kind == 1 ? .monospaced : .default))
+        let widths = gridWidths
+        var found: [Int: GridCell] = [:]
+        for cell in gr.cells where found[cell.column] == nil {
+            found[cell.column] = cell
+        }
+        let byColumn = found
+        let columns: [Int] = widths.isEmpty ? gr.cells.map(\.column) : Array(0..<widths.count)
+        return HStack(alignment: .top, spacing: 4) {
+            Text("\(gr.index + 1)")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(state.theme.textSecondary)
+                .frame(width: Self.rowNumberWidth, alignment: .trailing)
+                .padding(.vertical, 6)
+            ForEach(columns, id: \.self) { column in
+                let cell = byColumn[column]
+                let numeric = cell?.kind == 1
+                let width: CGFloat = column < widths.count ? widths[column] : 96
+                Text(cell?.text ?? "")
+                    .font(.system(size: 12, weight: .regular, design: numeric ? .monospaced : .default))
                     .foregroundColor(state.theme.textPrimary)
-                    .frame(minWidth: 50, alignment: cell.kind == 1 ? .trailing : .leading)
+                    .lineLimit(4)
+                    .frame(width: width, alignment: numeric ? .trailing : .leading)
                     .padding(6)
                     .background(state.theme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
         }
+        .opacity(gr.isHidden ? 0.55 : 1)
     }
 
     // MARK: - Images
@@ -412,6 +491,9 @@ public struct DocumentViewer: View {
                 isLoadingItems = false
                 items.append(contentsOf: batch)
                 loadedCount += UInt64(batch.count)
+                if !batch.isEmpty {
+                    loadMoreTablesIfNeeded()
+                }
             } catch let error as ArcaError {
                 guard generation == loadGeneration else { return }
                 isLoadingItems = false
@@ -428,11 +510,19 @@ public struct DocumentViewer: View {
 
     private func fontForStyle(_ style: String) -> Font {
         switch style {
-        case "Title": return .system(size: 24, weight: .bold)
+        case "Title": return ArcaTheme.display(24)
         case "Heading1": return .system(size: 20, weight: .bold)
         case "Heading2": return .system(size: 17, weight: .semibold)
         case "Heading3": return .system(size: 15, weight: .semibold)
         default: return .system(size: 15, weight: .regular)
+        }
+    }
+
+    private func frameAlignment(_ align: Int) -> Alignment {
+        switch align {
+        case 1: return .center
+        case 2: return .trailing
+        default: return .leading
         }
     }
 

@@ -53,6 +53,34 @@ final class PageDrawingTests: XCTestCase {
         XCTAssertEqual(id, 12_345_678_901_234)
     }
 
+    func testAPictureIsDrawnTopRowFirstInAFrameWhoseOriginIsItsBottomLeftCorner() {
+        // A picture 100 x 50 whose frame has its top left corner at (10, 150).
+        let frame: [Double] = [100, 0, 0, -50, 10, 200]
+        let top = PageDrawing.topDownMatrix(frame)
+        func map(_ m: [Double], _ u: Double, _ v: Double) -> [Double] {
+            [m[0] * u + m[2] * v + m[4], m[1] * u + m[3] * v + m[5]]
+        }
+        XCTAssertEqual(map(frame, 0, 0), [10, 200], "the engine's origin is the bottom left corner")
+        XCTAssertEqual(map(top, 0, 0), [10, 150], "the first row is the top of the frame")
+        XCTAssertEqual(map(top, 1, 1), [110, 200], "the last row is the bottom")
+        XCTAssertEqual(PageDrawing.topDownMatrix([1, 2]), [1, 0, 0, 1, 0, 0])
+    }
+
+    func testEveryPaletteKeepsItsTextReadable() {
+        XCTAssertEqual(ArcaTheme.allCases.count, 10)
+        XCTAssertEqual(ArcaTheme.allCases.filter(\.isDark).count, 5)
+        for theme in ArcaTheme.allCases {
+            let p = theme.palette
+            XCTAssertGreaterThanOrEqual(ArcaTheme.contrast(p.textPrimary, p.background), 7, theme.rawValue)
+            XCTAssertGreaterThanOrEqual(ArcaTheme.contrast(p.textPrimary, p.surface), 7, theme.rawValue)
+            XCTAssertGreaterThanOrEqual(ArcaTheme.contrast(p.textSecondary, p.surface), 4.5, theme.rawValue)
+            XCTAssertGreaterThanOrEqual(ArcaTheme.contrast(p.textSecondary, p.surfaceSecondary), 4.5, theme.rawValue)
+            XCTAssertGreaterThanOrEqual(ArcaTheme.contrast(p.accent, p.surface), 4.5, theme.rawValue)
+            XCTAssertGreaterThanOrEqual(ArcaTheme.contrast(p.onAccent, p.accent), 4.5, theme.rawValue)
+            XCTAssertEqual(ArcaTheme(rawValue: theme.rawValue), theme, "the stored name finds the palette again")
+        }
+    }
+
     func testRejectsAnUnknownPrimitive() {
         XCTAssertThrowsError(try PageDrawing.parse(#"{"w":1,"h":1,"p":[["Z"]]}"#)) { error in
             XCTAssertEqual(error as? PageDrawing.ParseError, .badPrimitive(0))

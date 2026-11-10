@@ -44,8 +44,16 @@ public struct RootView: View {
             }
         }
         .animation(.arcaSpring, value: state.currentScreen)
+        // Alerts, pickers, the keyboard and the status bar follow the palette, not the system
+        // setting: a light palette on a phone in dark mode would otherwise get white status-bar
+        // text on a white background.
+        .preferredColorScheme(state.theme.colorScheme)
+        .tint(state.theme.accent)
         // Password Prompt Modal
-        .alert("Документ зашифрован", isPresented: $state.isPasswordPromptVisible) {
+        .alert(
+            state.passwordWasWrong ? "Пароль не подошёл" : "Документ зашифрован",
+            isPresented: $state.isPasswordPromptVisible
+        ) {
             SecureField("Пароль", text: $state.passwordInput)
             Button("Разблокировать") {
                 state.submitPassword()
@@ -110,7 +118,7 @@ private struct ScanningView: View {
 
             VStack(spacing: 8) {
                 Text("Рентген безопасности…")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(ArcaTheme.display(22))
                     .foregroundColor(state.theme.textPrimary)
 
                 Text(fileName)

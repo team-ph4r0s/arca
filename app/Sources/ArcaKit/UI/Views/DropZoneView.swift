@@ -53,7 +53,7 @@ public struct DropZoneView: View {
 
                     VStack(spacing: 8) {
                         Text("Arca")
-                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                            .font(ArcaTheme.display(38))
                             .foregroundColor(state.theme.textPrimary)
 
                         Text("Параноидально безопасный просмотр\nв одноразовой Wasm-песочнице")

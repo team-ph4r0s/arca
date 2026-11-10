@@ -60,6 +60,18 @@ public struct PageDrawing: Sendable, Equatable {
         return ids
     }
 
+    /// The matrix that puts a picture stored top row first into the frame of an image primitive.
+    ///
+    /// The engine gives the matrix `[a, b, c, d, e, f]` of the unit square with the convention of
+    /// a PDF page: the origin of the square is the picture's *bottom* left corner and its second
+    /// axis runs up the picture. An image is stored the other way round (its first row is the
+    /// top), so drawing it straight into the unit square shows it upside down. This is the
+    /// matrix of the square with the second axis turned over, in which the image is drawn as is.
+    public static func topDownMatrix(_ m: [Double]) -> [Double] {
+        guard m.count >= 6 else { return [1, 0, 0, 1, 0, 0] }
+        return [m[0], m[1], -m[2], -m[3], m[4] + m[2], m[5] + m[3]]
+    }
+
     public enum ParseError: Error, Equatable {
         case notAnObject
         case badPrimitive(Int)
