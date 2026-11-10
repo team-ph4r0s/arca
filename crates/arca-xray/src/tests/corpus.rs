@@ -793,8 +793,14 @@ fn every_sample_produces_the_kinds_it_declares() {
 fn every_threat_kind_has_a_sample() {
     let covered: std::collections::BTreeSet<K> =
         samples().iter().flat_map(|s| s.kinds.iter().copied()).collect();
-    let missing: Vec<&str> =
-        K::ALL.iter().filter(|k| !covered.contains(k)).map(|k| k.id()).collect();
+    // `DefaultPassword` is a note about how a file was opened: the scanner never produces it (it
+    // sees the decrypted content), the sandbox guest adds it. Its sample is the encrypted fixture
+    // of the guest's tests (`the_built_in_password_of_excel_hides_nothing_from_the_scan`).
+    let missing: Vec<&str> = K::ALL
+        .iter()
+        .filter(|k| !covered.contains(k) && **k != K::DefaultPassword)
+        .map(|k| k.id())
+        .collect();
     assert!(
         missing.is_empty(),
         "add a corpus sample (tests/corpus.rs) for: {}",

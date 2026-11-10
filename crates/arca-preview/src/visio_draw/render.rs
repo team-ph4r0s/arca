@@ -918,7 +918,7 @@ impl<'a> Painter<'a> {
             id,
         });
         if id == IMAGE_NONE {
-            self.note("metafiles and embedded objects are shown as placeholders");
+            self.note("pictures and embedded objects are shown as placeholders");
         }
     }
 
