@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# Arca для Android (v0.7.3)
+# Arca для Android (v0.8.0)
 
 Приложение, которое открывает Word, Excel, PowerPoint, OpenDocument, RTF, PDF и письма
 Outlook так, как будто файл — враждебный: сначала «рентген безопасности», потом
@@ -295,8 +295,8 @@ API платформы; что в них есть на самом деле (пр
   экспортирован только `MainActivity` (с фильтрами «Открыть с помощью»).
 * **Оформление.** В «Настройках» режим «как в системе / светлая / тёмная» выбирает **группу** палитр, а
   палитра выбирается внутри неё (`core/Appearance`, чистая Java; в режиме «как в системе» показаны обе
-  строки, действует та, что соответствует состоянию системы). Светлые: Alabaster Studio (бумажная
-  `#FAF9F6`), Cashmere & Cappuccino, Nordic Pearl, Sage & Linen, Rose Quartz Daylight. Тёмные: Obsidian
+  строки, действует та, что соответствует состоянию системы). Светлые: Alabaster Studio (слоновая
+  кость `#FBFAF6` и антикварное золото), Cashmere & Cappuccino (коньячная кожа), Nordic Pearl (полночный синий), Sage & Linen (гоночный зелёный), Rose Quartz Daylight (бордо). Тёмные: Obsidian
   Vault (чёрная `#000000` для OLED; лист страницы в постраничном виде переворачивается по светлоте с
   сохранением оттенка), Sierra Blue & Slate, Emerald SecOps, Desert Titanium, Midnight Amethyst. Палитра
   от 0.5 переносится на режим и выбор в группе (`Prefs.migrateAppearance`). Экраны по-прежнему

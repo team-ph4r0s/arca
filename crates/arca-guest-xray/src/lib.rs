@@ -923,6 +923,52 @@ mod tests {
     }
 
     #[test]
+    fn a_package_inside_a_package_is_opened_once_and_never_called_clean() {
+        // An encrypted package whose content is another encrypted package (both with the
+        // built-in password): one layer is opened, the next is reported as what it is. The
+        // guest does not loop, and the file is not clean.
+        let enc = fixture("enc-nested.xlsx");
+        let (code, env) = process(&request_for(Op::Scan, 0, &enc));
+        assert_eq!(code, status::OK_UNLOCKED);
+        let (kind, payload) = open(&env);
+        let r = decode_report(kind, payload).unwrap();
+        assert_eq!(r.format, FileFormat::EncryptedOoxml, "the inner layer stays closed");
+        assert_eq!(r.verdict, Verdict::Unverified);
+        assert!(r.has(arca_xray::ThreatKind::EncryptedDocument));
+        assert!(r.has(arca_xray::ThreatKind::DefaultPassword));
+        // There is nothing to show of it, and nothing to make a sterile copy of.
+        let (code, _) = process(&request_for(Op::Preview, 0, &enc));
+        assert_eq!(code, status::ENCRYPTED);
+        let (code, _) = process(&request_for(Op::Sanitize, flags::SANITIZE_ALL, &enc));
+        assert!(!status::is_success(code), "{code}");
+    }
+
+    #[test]
+    fn a_package_that_asks_for_endless_key_stretching_is_refused_at_once() {
+        // The descriptor of an agile package states how many hash rounds stretch the password.
+        // One that asks for ten times what Office writes is refused before any round is run.
+        let enc = fixture("enc-agile.docx");
+        let needle = b"spinCount=\"100000\"";
+        let at = enc.windows(needle.len()).position(|w| w == needle).expect("the descriptor");
+        let mut greedy = enc.clone();
+        greedy[at..at + needle.len()].copy_from_slice(b"spinCount=\"999999\"");
+        let started = std::time::Instant::now();
+        let (code, _) = process(&with_password(Op::Scan, 0, "пароль-123", &greedy));
+        assert!(!status::is_success(code), "a greedy package must not open ({code})");
+        assert_ne!(code, status::WRONG_PASSWORD, "it is refused, not tried");
+        // Without a password it is simply an encrypted file again (and the built-in password is
+        // refused the same way, not ground through).
+        let (code, env) = process(&request_for(Op::Scan, 0, &greedy));
+        assert_eq!(code, status::OK);
+        let (kind, payload) = open(&env);
+        assert_eq!(decode_report(kind, payload).unwrap().verdict, Verdict::Unverified);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "refusing must not cost the stretching it refuses"
+        );
+    }
+
+    #[test]
     fn hostile_encryption_headers_are_refused_within_bounds() {
         // Every single-byte change of the encryption streams of a real package: an error or a
         // wrong password, never a panic, and never a success with the wrong password.
