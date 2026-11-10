@@ -196,6 +196,22 @@ public final class PageDrawing {
         return d;
     }
 
+    /**
+     * The matrix that puts a picture stored top row first into the frame of an image primitive.
+     *
+     * <p>The engine gives the matrix {@code a b c d e f} of the unit square with the convention of a
+     * PDF page: the origin of the square is the picture's <em>bottom</em> left corner and its second
+     * axis runs up the picture. A bitmap is stored the other way round (its first row is the top),
+     * so drawing it straight into the unit square shows it upside down. This returns the matrix of
+     * the square with the second axis turned over, in which the bitmap can be drawn as it is.
+     */
+    public static float[] topDown(float[] m) {
+        if (m == null || m.length < 6) {
+            return new float[] {1f, 0f, 0f, 1f, 0f, 0f};
+        }
+        return new float[] {m[0], m[1], -m[2], -m[3], m[4] + m[2], m[5] + m[3]};
+    }
+
     /** How much text the page holds (for tests and diagnostics). */
     public int textRuns() {
         int n = 0;

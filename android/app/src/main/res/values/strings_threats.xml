@@ -180,6 +180,8 @@
     <string name="threat_encrypted_document_text">The content is encrypted, so it cannot be examined. Encrypted attachments are often used to slip past scanners.</string>
     <string name="threat_encrypted_member_title">Encrypted part</string>
     <string name="threat_encrypted_member_text">A part inside the file is encrypted and could not be examined.</string>
+    <string name="threat_default_password_title">Encrypted with the built-in password</string>
+    <string name="threat_default_password_text">The file is encrypted with the password Excel applies by itself. Office software opens it without asking, while scanners that do not know the password see nothing inside: a known way to hide content. Arca decrypted the file and examined what is in it.</string>
     <string name="threat_image_camera_identity_title">Camera, owner or serial number</string>
     <string name="threat_image_camera_identity_text">The file names the camera or program, and sometimes its owner or serial number, which can identify who took the picture.</string>
     <string name="threat_image_embedded_thumbnail_title">Embedded small copy</string>

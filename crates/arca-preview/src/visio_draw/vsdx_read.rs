@@ -262,11 +262,22 @@ impl Build {
             {
                 sec.cells.push((name, val));
             }
-        } else if let Some(val) = val
-            && let Some(s) = self.sheet()
-            && s.cells.len() < MAX_CELLS
-        {
-            s.cells.push((name, val));
+        } else {
+            // The layers a shape is on: a cell of the shape itself (`"0;2"`), as Visio writes it.
+            if name == "LayerMember"
+                && let Some(raw) = v.as_deref()
+                && let Some(s) = self.sheet()
+            {
+                let ids = raw.split(';').filter_map(|p| p.trim().parse::<u32>().ok()).take(64);
+                s.layers.extend(ids);
+                s.layers.truncate(64);
+            }
+            if let Some(val) = val
+                && let Some(s) = self.sheet()
+                && s.cells.len() < MAX_CELLS
+            {
+                s.cells.push((name, val));
+            }
         }
     }
 
@@ -520,6 +531,15 @@ impl Handler for Build {
                     s.foreign = Some(if kind.is_empty() { "image".into() } else { kind });
                 }
             }
+            // Inside a shape only `ForeignData` holds a `Rel`: the part with the picture.
+            "Rel" if !self.stack.is_empty() => {
+                let rid = tag.attr_rel("id").map(|v| v.into_owned()).filter(|v| v.len() <= 64);
+                if let Some(s) = self.sheet()
+                    && s.foreign.is_some()
+                {
+                    s.foreign_rel = rid;
+                }
+            }
             "Connect" if self.stack.is_empty() => {
                 if self.connects.len() >= 200_000 {
                     self.truncated = true;
@@ -610,6 +630,34 @@ fn parse(pkg: &Package<'_>, text: &str, b: &mut Build) -> bool {
     ok
 }
 
+/// The raster formats the sandbox decodes; a metafile or an embedded object stays a placeholder.
+fn is_raster(part: &str) -> bool {
+    let ext = part.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "jpe" | "gif" | "bmp" | "dib")
+}
+
+/// Turns the picture relationships of the shapes read from `part` into picture ids. Only a part
+/// inside the package counts: an external target is never fetched.
+fn resolve_pictures(
+    pkg: &mut Package<'_>,
+    part: &str,
+    sheets: &mut [Sheet],
+    depth: usize,
+) -> Result<(), PreviewError> {
+    for s in sheets {
+        if let Some(rid) = s.foreign_rel.take()
+            && let Some((target, false)) = pkg.rel_by_id(part, &rid)?
+            && is_raster(&target)
+        {
+            s.image = pkg.entry_id(&target);
+        }
+        if depth < MAX_NEST {
+            resolve_pictures(pkg, part, &mut s.kids, depth + 1)?;
+        }
+    }
+    Ok(())
+}
+
 fn collect_masters(sheets: &[Sheet], out: &mut BTreeSet<u32>, depth: usize) {
     for s in sheets {
         if let Some(m) = s.master {
@@ -691,6 +739,7 @@ pub(crate) fn read(
         let mut b = Build::new(policy);
         let ok = parse(pkg, &text, &mut b);
         def.shapes = std::mem::take(&mut b.top);
+        resolve_pictures(pkg, &part, &mut def.shapes, 0)?;
         def.connects = std::mem::take(&mut b.connects);
         def.truncated = b.truncated || !ok;
         def.loaded = true;
@@ -850,7 +899,9 @@ fn read_masters(
         let Some(xml) = read_xml(pkg, &part)? else { continue };
         let mut b = Build::new(policy);
         parse(pkg, &xml, &mut b);
-        let m = Master::new(info.id, info.name.clone(), std::mem::take(&mut b.top));
+        let mut top = std::mem::take(&mut b.top);
+        resolve_pictures(pkg, &part, &mut top, 0)?;
+        let m = Master::new(info.id, info.name.clone(), top);
         doc.masters.entry(info.id).or_insert(m);
         // A master's own style sheets are not separate: the document's apply.
     }

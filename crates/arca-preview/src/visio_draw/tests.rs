@@ -757,3 +757,118 @@ fn a_shape_with_rounding_is_drawn_with_rounded_corners_and_the_page_says_how() {
     let plain = render(&one(&rect("")));
     assert!(paths(&plain)[0].0.iter().all(|c| *c != op::CURVE));
 }
+
+// ---- 0.8.0: a drawing laid out the way Visio writes one -----------------------------------------
+
+fn flowchart() -> Vec<u8> {
+    std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/flowchart.vsdx"))
+        .unwrap_or_else(|e| panic!("flowchart.vsdx: {e}"))
+}
+
+#[test]
+fn a_flowchart_as_visio_writes_it_is_drawn_whole() {
+    let page = crate::render_page(&flowchart(), 0, &PreviewPolicy::default())
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!((page.width, page.height), (612.0, 792.0));
+    assert!(!page.truncated);
+    let texts: Vec<(&str, f32, f32, f32)> = page
+        .prims
+        .iter()
+        .filter_map(|p| match p {
+            Prim::Text { text, x, y, angle, .. } => Some((text.as_str(), *x, *y, *angle)),
+            _ => None,
+        })
+        .collect();
+    let all: String = texts.iter().map(|t| t.0).collect::<Vec<_>>().join(" ");
+    for want in
+        ["Начало", "Оплачен?", "Отгрузить со склада", "Склад", "Конец", "да", "нет", "Условие"]
+    {
+        assert!(all.contains(want), "{want}: {all}");
+    }
+    // The shape on the layer that is switched off is shown only as hidden content (faintly, when
+    // the reader asks to see what a document hides) and not at all otherwise.
+    let shown = render_visio_page_noted(&flowchart(), 0, &PreviewPolicy::default())
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(shown.hidden_shown, 1, "the layer membership of the shape was read");
+    let strict = PreviewPolicy { reveal_hidden: false, ..PreviewPolicy::default() };
+    let without = crate::render_page(&flowchart(), 0, &strict).unwrap_or_else(|e| panic!("{e}"));
+    assert!(
+        !without
+            .prims
+            .iter()
+            .any(|p| matches!(p, Prim::Text { text, .. } if text.contains("Черновик"))),
+        "a shape on a hidden layer is not drawn"
+    );
+    // The rotated note is drawn rotated; everything else is upright, the flipped shape included.
+    let turned: Vec<_> = texts.iter().filter(|t| t.3.abs() > 0.01).collect();
+    assert!(
+        !turned.is_empty()
+            && turned.iter().all(|t| t.0.contains("заметка") || t.0.contains("Повёрнутая")),
+        "{turned:?}"
+    );
+    assert!(texts.iter().any(|t| t.0.contains("Отражённая") && t.3.abs() < 0.01));
+    // The picture of the page can be asked for: it is a part of the package, not a placeholder.
+    let pictures: Vec<u32> = page
+        .prims
+        .iter()
+        .filter_map(|p| match p {
+            Prim::Image { id, .. } => Some(*id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(pictures.len(), 1);
+    assert_ne!(pictures[0], crate::model::IMAGE_NONE);
+    let image = crate::picture(&flowchart(), pictures[0], &PreviewPolicy::default())
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!((image.width, image.height), (96, 64));
+    // Fills of the masters reach their instances, and an instance's own fill wins.
+    let fills: Vec<u32> = page
+        .prims
+        .iter()
+        .filter_map(|p| match p {
+            Prim::Path { fill, .. } if fill >> 24 != 0 => Some(*fill),
+            _ => None,
+        })
+        .collect();
+    for want in [0xFF5B_9BD5u32, 0xFFED_7D31, 0xFF70_AD47, 0xFFFF_C000, 0xFFC0_0000, 0xFF70_30A0] {
+        assert!(fills.contains(&want), "{want:#x}: {fills:x?}");
+    }
+    // Everything stays on the page.
+    for p in &page.prims {
+        if let Prim::Text { x, y, .. } = p {
+            assert!((0.0..=612.0).contains(x) && (0.0..=792.0).contains(y), "{x} {y}");
+        }
+    }
+}
+
+#[test]
+fn a_picture_relationship_never_leaves_the_package() {
+    // The same drawing with the picture's relationship turned into an external one, and into a
+    // part that is not a picture: neither is fetched or decoded; both stay placeholders.
+    for (from, to) in [
+        (
+            r#"Target="../media/image1.png""#,
+            r#"Target="https://example.org/track.png" TargetMode="External""#,
+        ),
+        (r#"Target="../media/image1.png""#, r#"Target="../document.xml""#),
+        (r#"Target="../media/image1.png""#, r#"Target="../../../../etc/passwd.png""#),
+    ] {
+        let data = crate::testkit::replace_in_zip(
+            &flowchart(),
+            "visio/pages/_rels/page1.xml.rels",
+            from,
+            to,
+        );
+        let page = crate::render_page(&data, 0, &PreviewPolicy::default())
+            .unwrap_or_else(|e| panic!("{e}"));
+        let ids: Vec<u32> = page
+            .prims
+            .iter()
+            .filter_map(|p| match p {
+                Prim::Image { id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [crate::model::IMAGE_NONE], "{to}");
+    }
+}

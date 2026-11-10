@@ -180,6 +180,8 @@
     <string name="threat_encrypted_document_text">Содержимое зашифровано, поэтому его нельзя исследовать. Зашифрованные вложения часто используют, чтобы обойти сканеры.</string>
     <string name="threat_encrypted_member_title">Зашифрованная часть</string>
     <string name="threat_encrypted_member_text">Часть внутри файла зашифрована, и её не удалось исследовать.</string>
+    <string name="threat_default_password_title">Зашифрован встроенным паролем</string>
+    <string name="threat_default_password_text">Файл зашифрован паролем, который Excel подставляет сам. Офисные программы открывают его без вопроса, а сканеры, не знающие этот пароль, не видят содержимого: известный способ скрыть начинку. Arca расшифровала файл и проверила то, что внутри.</string>
     <string name="threat_image_camera_identity_title">Камера, владелец или серийный номер</string>
     <string name="threat_image_camera_identity_text">Файл называет камеру или программу, а иногда владельца и серийный номер, по которым можно узнать автора снимка.</string>
     <string name="threat_image_embedded_thumbnail_title">Встроенная миниатюра</string>

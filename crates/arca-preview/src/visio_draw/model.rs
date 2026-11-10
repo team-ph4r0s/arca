@@ -248,6 +248,10 @@ pub(crate) struct Sheet {
     pub(crate) kids: Vec<Sheet>,
     /// What a picture or embedded object is (`bitmap`, `metafile`, `object`).
     pub(crate) foreign: Option<String>,
+    /// The relationship that names the picture's part (`.vsdx`), until it is resolved.
+    pub(crate) foreign_rel: Option<String>,
+    /// What to ask the sandbox for to see the picture, when it is one that can be decoded.
+    pub(crate) image: Option<u32>,
     /// The sheet has cells of a 3-D effect (bevel, extrusion, rotation).
     pub(crate) effect_3d: bool,
     /// The sheet has cells of a visual effect that is not drawn (glow, soft edges, reflection).

@@ -250,7 +250,8 @@ final class PageView extends View {
         }
         if (bmp != null && !bmp.isRecycled()) {
             c.save();
-            c.concat(matrix(m));
+            // The frame's origin is the picture's bottom left corner; a bitmap starts at its top.
+            c.concat(matrix(PageDrawing.topDown(m)));
             paint.setStyle(Paint.Style.FILL);
             paint.setFilterBitmap(true);
             c.drawBitmap(bmp, null, new android.graphics.RectF(0f, 0f, 1f, 1f), paint);

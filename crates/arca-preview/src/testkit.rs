@@ -14,6 +14,32 @@ pub(crate) fn zip(parts: &[(&str, &[u8])]) -> Vec<u8> {
     w.finish().unwrap_or_default()
 }
 
+/// A copy of the ZIP archive `pkg` in which `from` is replaced by `to` in the text of the member
+/// `name` (the member must hold `from`).
+pub(crate) fn replace_in_zip(pkg: &[u8], name: &str, from: &str, to: &str) -> Vec<u8> {
+    let Ok(zip_in) = arca_container::zip::ZipArchive::parse(pkg, PreviewPolicy::default().zip)
+    else {
+        panic!("not a ZIP archive");
+    };
+    let mut budget = arca_container::InflateBudget::new(1 << 28, 1000, 16 << 20);
+    let mut members: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut found = false;
+    for entry in zip_in.entries() {
+        let mut data = zip_in.read(entry, &mut budget).unwrap_or_default();
+        if entry.name() == name {
+            let text = String::from_utf8_lossy(&data).into_owned();
+            assert!(text.contains(from), "{name} does not hold {from}");
+            data = text.replace(from, to).into_bytes();
+            found = true;
+        }
+        members.push((entry.name().to_owned(), data));
+    }
+    assert!(found, "no member {name}");
+    let refs: Vec<(&str, &[u8])> =
+        members.iter().map(|(n, d)| (n.as_str(), d.as_slice())).collect();
+    zip(&refs)
+}
+
 /// Builds an OPC package: content types + package rels + the given parts.
 ///
 /// `main` is `(part name, content type)`.

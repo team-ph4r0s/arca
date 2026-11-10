@@ -139,15 +139,19 @@ public final class Ui {
     public void style(TextView t, int style) {
         int colorRes = R.color.arca_on_surface;
         float size;
+        float tracking = 0f;
         Typeface face = Typeface.DEFAULT;
         switch (style) {
             case HEADLINE:
-                size = 24;
-                face = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+                // The one display face of the app: a serif, set a little tight.
+                size = 26;
+                face = Typeface.create("serif", Typeface.BOLD);
+                tracking = -0.01f;
                 break;
             case TITLE:
                 size = 18;
                 face = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+                tracking = 0.005f;
                 break;
             case SMALL:
                 size = 14;
@@ -156,6 +160,7 @@ public final class Ui {
             case CAPTION:
                 size = 12;
                 colorRes = R.color.arca_on_surface_variant;
+                tracking = 0.03f;
                 break;
             case MONO:
                 size = 13;
@@ -171,6 +176,7 @@ public final class Ui {
         }
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
         t.setTypeface(face);
+        t.setLetterSpacing(tracking);
         t.setTextColor(color(colorRes));
         t.setLineSpacing(0f, style == BODY ? 1.15f : 1.1f);
     }
@@ -221,9 +227,9 @@ public final class Ui {
         if (glass()) {
             Theme.applyGlass(l, color(R.color.arca_surface), color(R.color.arca_primary), nightMode(), dp(22), true);
         } else {
-            l.setBackground(rounded(color(R.color.arca_surface), color(R.color.arca_outline), 16));
+            l.setBackground(rounded(color(R.color.arca_surface), color(R.color.arca_outline), 18));
         }
-        int p = dp(16);
+        int p = dp(18);
         l.setPadding(p, p, p, p);
         return l;
     }

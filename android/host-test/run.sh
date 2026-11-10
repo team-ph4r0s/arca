@@ -26,7 +26,7 @@ target_dir=$(cargo metadata --format-version 1 --no-deps ${ARCA_CARGO_FLAGS:-} |
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-javac -Xlint:all -Werror -d "$work" \
+javac -encoding UTF-8 -Xlint:all -Werror -d "$work" \
     android/app/src/main/java/org/arca/viewer/Native.java \
     android/app/src/main/java/org/arca/viewer/core/*.java \
     android/host-test/NativeTest.java android/host-test/ContractTest.java android/host-test/StatsNativeTest.java

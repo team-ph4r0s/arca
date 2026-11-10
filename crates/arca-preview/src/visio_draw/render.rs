@@ -911,12 +911,15 @@ impl<'a> Painter<'a> {
         };
         // The unit square is mapped onto the shape's box.
         let sq = Mat { a: w, d: h, ..Mat::ID }.then(m);
+        let id = look.sheet.image.or(look.target.and_then(|t| t.image)).unwrap_or(IMAGE_NONE);
         self.push(Prim::Image {
             m: [f32c(sq.a), f32c(sq.b), f32c(sq.c), f32c(sq.d), f32c(sq.e), f32c(sq.f)],
             label,
-            id: IMAGE_NONE,
+            id,
         });
-        self.note("pictures and embedded objects are shown as placeholders");
+        if id == IMAGE_NONE {
+            self.note("metafiles and embedded objects are shown as placeholders");
+        }
     }
 
     // ---- text ----

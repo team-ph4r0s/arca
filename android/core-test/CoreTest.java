@@ -1282,6 +1282,27 @@ public final class CoreTest {
                 && !Capabilities.canRender("Png") && !Capabilities.canRender("Csv") && !Capabilities.canRender(""),
             "PDF, slides, sheets, Visio and text documents have a page view; pictures and plain text do not");
         check(Capabilities.isVisio("Vsd") && !Capabilities.isVisio("Pdf"), "only Visio carries the 3-D notice");
+
+        // A picture 100 x 50 whose frame has its top left corner at (10, 150): the engine gives the
+        // unit square with the origin at the bottom left corner, (10, 200).
+        float[] frame = {100f, 0f, 0f, -50f, 10f, 200f};
+        float[] top = PageDrawing.topDown(frame);
+        // In the matrix a bitmap is drawn with, its first row (v = 0) is the top of the frame...
+        eq(10f, top[0] * 0f + top[2] * 0f + top[4], "the left edge of the top row");
+        eq(150f, top[1] * 0f + top[3] * 0f + top[5], "the top row is at the top of the frame");
+        // ...and its last row (v = 1) the bottom, with the columns left to right as before.
+        eq(200f, top[1] * 0f + top[3] * 1f + top[5], "the last row is at the bottom of the frame");
+        eq(110f, top[0] * 1f + top[2] * 1f + top[4], "the right edge");
+        // Drawn straight into the engine's square the first row would land at the bottom.
+        eq(200f, frame[1] * 0f + frame[3] * 0f + frame[5], "the engine's origin is the bottom left corner");
+        // A rotated frame keeps its handedness: both forms cover the same four corners.
+        float[] turned = {0f, 80f, 60f, 0f, 5f, 7f};
+        float[] t2 = PageDrawing.topDown(turned);
+        eq(turned[4] + turned[2], t2[4], "the origin moves along the second axis (x)");
+        eq(turned[5] + turned[3], t2[5], "the origin moves along the second axis (y)");
+        eq(turned[4], t2[2] + t2[4], "the far end of the second axis is the old origin");
+        eq(6, PageDrawing.topDown(null).length, "no matrix is the identity, not a crash");
+        eq(6, PageDrawing.topDown(new float[2]).length, "a short matrix is the identity");
     }
 
     // ---------------------------------------------------------------------------------------
