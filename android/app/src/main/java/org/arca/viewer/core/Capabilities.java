@@ -45,6 +45,9 @@ public final class Capabilities {
     /** Visio formats: drawn flat, as the specification describes the shapes (there is no 3-D scene). */
     private static final Set<String> VISIO = set("Vsdx", "Vsdm", "VisioTemplateOrStencil", "Vsd");
 
+    private static final Set<String> PRESENTATIONS = set(
+        "Pptx", "Pptm", "Ppsx", "Ppsm", "Potx", "Potm", "Odp", "Ppt");
+
     /**
      * Formats that can be drawn page by page: PDF, slides, sheets, Visio drawings, the relationship
      * diagram of Access databases, and text documents laid out from their reading view.
@@ -84,6 +87,10 @@ public final class Capabilities {
     /** Whether the engine can draw {@code format} page by page. */
     public static boolean canRender(String format) {
         return RENDER.contains(format);
+    }
+
+    public static boolean isPresentation(String format) {
+        return PRESENTATIONS.contains(format);
     }
 
     /** Whether {@code format} is a Visio drawing (its page view says that 3-D effects are not drawn). */

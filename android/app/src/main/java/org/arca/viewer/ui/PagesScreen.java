@@ -16,8 +16,12 @@ import org.arca.viewer.MainActivity;
 import org.arca.viewer.Prefs;
 import org.arca.viewer.R;
 import org.arca.viewer.Session;
+import org.arca.viewer.core.Capabilities;
+import org.arca.viewer.core.Model;
 import org.arca.viewer.core.PageDrawing;
 import org.arca.viewer.core.Zoom;
+
+import java.util.function.IntConsumer;
 
 /**
  * One page of the document drawn as the document lays it out. The drawing comes from the
@@ -50,6 +54,9 @@ public final class PagesScreen extends Screen {
     public View build() {
         final Session s = Session.get();
         final Session.PageState st = s.page();
+        Model.Report report = s.report();
+        boolean slides = report != null && Capabilities.isPresentation(report.format);
+        int positionLabel = slides ? R.string.slides_position : R.string.pages_position;
         if (!started) {
             started = true;
             index = 0;
@@ -60,25 +67,29 @@ public final class PagesScreen extends Screen {
         LinearLayout col = ui.vbox();
         col.setPadding(ui.dp(12), ui.dp(8), ui.dp(12), ui.dp(16));
         final PageDrawing d = st.drawing;
-        int pages = d == null ? 0 : d.pages;
-        pageCount = pages;
+        if (d != null) {
+            pageCount = d.pages;
+        }
+        int pages = pageCount;
 
         LinearLayout nav = ui.hbox();
-        View prev = ui.iconButton(R.drawable.ic_chevron_up, R.string.pages_prev, new View.OnClickListener() {
+        View prev = ui.iconButton(slides ? R.drawable.ic_chevron_left : R.drawable.ic_chevron_up,
+            slides ? R.string.slides_prev : R.string.pages_prev, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 go(s, index - 1);
             }
         });
-        View next = ui.iconButton(R.drawable.ic_chevron_down, R.string.pages_next, new View.OnClickListener() {
+        View next = ui.iconButton(slides ? R.drawable.ic_chevron_right : R.drawable.ic_chevron_down,
+            slides ? R.string.slides_next : R.string.pages_next, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 go(s, index + 1);
             }
         });
         prev.setEnabled(index > 0 && !st.running);
-        next.setEnabled(d != null && index + 1 < pages && !st.running);
-        TextView pos = ui.text(d == null ? "" : ui.str(R.string.pages_position, index + 1, pages), Ui.SMALL);
+        next.setEnabled(index + 1 < pages && !st.running);
+        TextView pos = ui.text(pages == 0 ? "" : ui.str(positionLabel, index + 1, pages), Ui.SMALL);
         nav.addView(prev);
         nav.addView(pos, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         pos.setGravity(android.view.Gravity.CENTER);
@@ -86,26 +97,33 @@ public final class PagesScreen extends Screen {
         if (Hinge.hasDock()) {
             // Folded window (tabletop or book): the page is on one part, the page controls on the other.
             dockView = dockPane(nav);
-        } else {
+        } else if (!slides) {
             col.addView(nav, ui.fillWidth());
         }
 
         if (st.running) {
-            col.addView(ui.text(R.string.pages_loading, Ui.BODY));
+            col.addView(ui.text(slides ? R.string.slides_loading : R.string.pages_loading, Ui.BODY));
         } else if (st.failure != null) {
             col.addView(ui.text(Errors.text(st.failure.status, org.arca.viewer.Session.get().isPicture()), Ui.BODY));
-            col.addView(ui.text(R.string.pages_failed, Ui.SMALL));
+            col.addView(ui.text(slides ? R.string.slides_failed : R.string.pages_failed, Ui.SMALL));
         } else if (d != null) {
             if (d.truncated) {
                 col.addView(ui.text(R.string.pages_note_truncated, Ui.SMALL));
             }
             col.addView(ui.text(R.string.pages_note_approx, Ui.CAPTION));
-            org.arca.viewer.core.Model.Report rep = org.arca.viewer.Session.get().report();
-            if (rep != null && org.arca.viewer.core.Capabilities.isVisio(rep.format)) {
+            if (report != null && Capabilities.isVisio(report.format)) {
                 col.addView(ui.text(R.string.pages_note_visio, Ui.CAPTION));
             }
             col.addView(ui.space(8));
             PageView sheet = new PageView(act, d, 0xFFD5DAE0, 0xFF46515E);
+            if (slides && sheetZoom == 1f) {
+                sheet.setSlideSwipe(new IntConsumer() {
+                    @Override
+                    public void accept(int delta) {
+                        onPage(delta);
+                    }
+                });
+            }
             if (sheetZoom > 1f) {
                 // Zoomed: the sheet is wider than the window and scrolls sideways.
                 HorizontalScrollView sideways = new HorizontalScrollView(act);
@@ -118,13 +136,20 @@ public final class PagesScreen extends Screen {
             }
         }
         ScrollView sv = new ScrollView(act);
+        if (slides && sheetZoom == 1f) {
+            sv.setFillViewport(true);
+            col.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        }
         sv.addView(col);
         LinearLayout body = ui.vbox();
         body.addView(centered(sv, 720), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        if (d != null && pages > 0) {
-            body.addView(bottomBar(s, st, pages), ui.fillWidth());
+        if (slides && !Hinge.hasDock() && pages > 0) {
+            body.addView(nav, ui.fillWidth());
         }
-        return page(header(ui.str(R.string.pages_title), true), body);
+        if (pages > 0) {
+            body.addView(bottomBar(s, st, pages, slides, positionLabel, pos), ui.fillWidth());
+        }
+        return page(header(ui.str(slides ? R.string.slides_title : R.string.pages_title), true), body);
     }
 
     /**
@@ -132,41 +157,50 @@ public final class PagesScreen extends Screen {
      * to the reading view and the zoom of the sheet. Everything in it also works from a keyboard
      * (PageUp / PageDown, Ctrl + / Ctrl -).
      */
-    private View bottomBar(final Session s, final Session.PageState st, final int pages) {
+    private View bottomBar(final Session s, final Session.PageState st, final int pages,
+                           boolean slides, int positionLabel, TextView navPosition) {
         LinearLayout bar = ui.vbox();
         ui.bar(bar, true);
         bar.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(8));
 
         LinearLayout top = ui.hbox();
-        final TextView pos = ui.text(ui.str(R.string.pages_position, index + 1, pages), Ui.SMALL);
+        final TextView pos = slides ? navPosition : ui.text(ui.str(positionLabel, index + 1, pages), Ui.SMALL);
         SeekBar slider = new SeekBar(act);
         slider.setMax(Math.max(0, pages - 1));
         slider.setProgress(Math.min(index, Math.max(0, pages - 1)));
         slider.setEnabled(pages > 1 && !st.running);
-        slider.setContentDescription(ui.str(R.string.pages_slider));
+        slider.setContentDescription(ui.str(slides ? R.string.slides_title : R.string.pages_slider));
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            private boolean dragging;
+
             @Override
             public void onProgressChanged(SeekBar b, int progress, boolean fromUser) {
                 if (fromUser) {
-                    pos.setText(ui.str(R.string.pages_position, progress + 1, pages));
+                    pos.setText(ui.str(positionLabel, progress + 1, pages));
+                    if (!dragging && progress != index) {
+                        go(s, progress);
+                    }
                 }
             }
 
             @Override
             public void onStartTrackingTouch(SeekBar b) {
-                // nothing: the page changes when the slider is let go
+                dragging = true;
             }
 
             @Override
             public void onStopTrackingTouch(SeekBar b) {
+                dragging = false;
                 if (b.getProgress() != index) {
                     go(s, b.getProgress());
                 }
             }
         });
         top.addView(slider, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        top.addView(ui.hspace(8));
-        top.addView(pos);
+        if (!slides) {
+            top.addView(ui.hspace(8));
+            top.addView(pos);
+        }
         bar.addView(top, ui.fillWidth());
 
         LinearLayout row = ui.hbox();
@@ -220,17 +254,12 @@ public final class PagesScreen extends Screen {
 
     @Override
     public boolean onPage(int delta) {
-        Session s = Session.get();
-        int to = index + delta;
-        if (s.page().running || to < 0 || to >= pageCount) {
-            return true;
-        }
-        go(s, to);
+        go(Session.get(), index + delta);
         return true;
     }
 
     private void go(Session s, int to) {
-        if (to < 0) {
+        if (s.page().running || to < 0 || to >= pageCount) {
             return;
         }
         index = to;

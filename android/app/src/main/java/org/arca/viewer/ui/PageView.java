@@ -19,6 +19,7 @@ import org.arca.viewer.core.PageDrawing;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.function.IntConsumer;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,6 +50,10 @@ final class PageView extends View {
     private final Set<Integer> asked = new HashSet<>();
     private final Map<Integer, Session.ImageCallback> waiting = new HashMap<>();
     private long pictureBytes;
+    private IntConsumer slideSwipe;
+    private float touchX;
+    private float touchY;
+    private boolean singleTouch;
 
     PageView(Context context, PageDrawing page, int placeholder, int placeholderText) {
         super(context);
@@ -66,12 +71,46 @@ final class PageView extends View {
         return invert ? Theme.invertTone(argb) : argb;
     }
 
+    void setSlideSwipe(IntConsumer slideSwipe) {
+        this.slideSwipe = slideSwipe;
+    }
+
     /**
      * A tap on a picture of the page opens it (the sandbox decodes it then); a tap anywhere else is
      * left to the page scroller.
      */
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        if (slideSwipe != null) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    touchX = e.getX();
+                    touchY = e.getY();
+                    singleTouch = true;
+                    break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                case MotionEvent.ACTION_CANCEL:
+                    singleTouch = false;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    float dx = e.getX() - touchX;
+                    float dy = e.getY() - touchY;
+                    float distance = 48f * getResources().getDisplayMetrics().density;
+                    if (singleTouch && Math.abs(dx) >= distance && Math.abs(dx) > 1.5f * Math.abs(dy)) {
+                        setPressed(false);
+                        slideSwipe.accept(dx < 0 ? 1 : -1);
+                        return true;
+                    }
+                    if (!singleTouch || Math.max(Math.abs(dx), Math.abs(dy))
+                        > android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop()) {
+                        setPressed(false);
+                        return true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
         if (!tooLarge && e.getActionMasked() == MotionEvent.ACTION_UP && e.getEventTime() - e.getDownTime() < 400
             && getContext() instanceof MainActivity) {
             PageDrawing.Prim hit = pictureAt(e.getX() / scale, e.getY() / scale);

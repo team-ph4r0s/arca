@@ -31,7 +31,7 @@
     <string name="threat_exploitable_ole_class_title">Объект типа, применявшегося в атаках</string>
     <string name="threat_exploitable_ole_class_text">Объект относится к компоненту, который использовали в настоящих атаках (например, «Редактор формул» или MSHTML). Открытие в Office могло бы выполнить код злоумышленника.</string>
     <string name="threat_active_x_control_title">Элемент ActiveX</string>
-    <string name="threat_active_x_control_text">Элемент Windows, встроенный в документ. Элементы — это программы, и они могут всё, что может пользователь.</string>
+    <string name="threat_active_x_control_text">В документ встроен компонент Windows. Если офисная программа разрешит его запуск, он сможет выполнять код с правами этой программы.</string>
     <string name="threat_ribbon_callbacks_title">Своя панель инструментов с кодом</string>
     <string name="threat_ribbon_callbacks_text">Документ меняет панель инструментов программы и привязывает код к её кнопкам.</string>
     <string name="threat_program_action_title">Действие, запускающее программу</string>
@@ -40,8 +40,8 @@
     <string name="threat_macro_button_field_text">Поле Word, которое выполняет макрос по щелчку или при открытии документа.</string>
     <string name="threat_pdf_java_script_title">JavaScript в PDF</string>
     <string name="threat_pdf_java_script_text">Сценарий внутри PDF. Программы чтения, выполняющие сценарии PDF, можно атаковать через них; сценарии могут отправлять данные и открывать другие файлы.</string>
-    <string name="threat_pdf_launch_action_title">PDF запускает программу</string>
-    <string name="threat_pdf_launch_action_text">PDF просит программу чтения запустить программу или открыть файл на компьютере. Почти никогда не бывает добросовестным.</string>
+    <string name="threat_pdf_launch_action_title">Запрос на запуск программы или открытие файла</string>
+    <string name="threat_pdf_launch_action_text">PDF содержит команду для программы просмотра. Если она разрешит это действие, документ сможет запустить внешнюю программу или открыть другой файл.</string>
     <string name="threat_pdf_auto_action_title">Действие PDF при открытии</string>
     <string name="threat_pdf_auto_action_text">В PDF есть действие, которое выполняется автоматически при открытии документа или страницы.</string>
     <string name="threat_pdf_embedded_file_title">Файл внутри PDF</string>
@@ -53,7 +53,7 @@
     <string name="threat_rtf_auto_update_object_title">Объект RTF, обновляющийся сам</string>
     <string name="threat_rtf_auto_update_object_text">Объект RTF настроен на автоматическое обновление при открытии, так что его программа запускается без щелчка.</string>
     <string name="threat_embedded_executable_title">Программа внутри документа</string>
-    <string name="threat_embedded_executable_text">Внутри документа лежит исполняемый файл (EXE, DLL, сценарий). У документа нет честной причины его содержать.</string>
+    <string name="threat_embedded_executable_text">В документ вложен файл с исполняемым кодом, например программа, библиотека или сценарий. Если этот код запустить, он может изменить файлы или получить доступ к данным.</string>
     <string name="threat_embedded_document_title">Документ внутри документа</string>
     <string name="threat_embedded_document_text">Внутри хранится другой документ. У него могут быть свои макросы, поэтому он исследуется отдельно.</string>
     <string name="threat_odf_event_script_title">Сценарий, привязанный к событию</string>
@@ -153,7 +153,7 @@
     <string name="threat_malformed_container_title">Повреждённый контейнер</string>
     <string name="threat_malformed_container_text">Внутреннее устройство файла нарушено или противоречит себе. Разные программы могут понимать его по-разному, чем пользуются злоумышленники.</string>
     <string name="threat_unusual_compression_title">Необычное сжатие</string>
-    <string name="threat_unusual_compression_text">В архиве применён вид сжатия, который не создают честные программы.</string>
+    <string name="threat_unusual_compression_text">Одна из частей архива сжата необычным способом. Arca может не суметь распаковать и проверить эту часть.</string>
     <string name="threat_macro_enabled_content_type_title">Тип файла допускает макросы</string>
     <string name="threat_macro_enabled_content_type_text">Файл относится к типу, предназначенному для макросов (например, DOCM или XLSM).</string>
     <string name="threat_content_type_mismatch_title">Тип файла не соответствует содержимому</string>
@@ -161,7 +161,7 @@
     <string name="threat_disguised_executable_title">Программа под видом документа</string>
     <string name="threat_disguised_executable_text">Файл — программа, но имя или значок у него как у документа.</string>
     <string name="threat_unsupported_format_title">Неподдерживаемый формат</string>
-    <string name="threat_unsupported_format_text">Arca не смогла распознать формат, поэтому не может поручиться за файл.</string>
+    <string name="threat_unsupported_format_text">Arca не смогла проверить содержимое файла, потому что не поддерживает его формат.</string>
     <string name="threat_scan_limit_reached_title">Достигнут предел проверки</string>
     <string name="threat_scan_limit_reached_text">Проверка остановилась, не дойдя до конца: файл слишком велик или глубоко вложен, либо часть его — вида, который Arca не разбирает. То, что не проверено, нельзя назвать безопасным.</string>
     <string name="threat_embedded_font_title">Встроенный шрифт</string>

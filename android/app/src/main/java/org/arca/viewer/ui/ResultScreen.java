@@ -51,7 +51,6 @@ public final class ResultScreen extends Screen {
     // (a weak reference: a closed document's report must not be kept alive by this screen)
     private static WeakReference<Model.Report> lastReport = new WeakReference<>(null);
     private static int tab;
-    private static final Set<Integer> OPEN = new HashSet<>();
 
     private FrameLayout tabBody;
     private LinearLayout chipRow;
@@ -76,7 +75,6 @@ public final class ResultScreen extends Screen {
         }
         if (r != lastReport.get()) {
             lastReport = new WeakReference<>(r);
-            OPEN.clear();
             tab = -1;
         }
         tabs = tabsOf(r);
@@ -302,7 +300,8 @@ public final class ResultScreen extends Screen {
         }
         if (!rejected && Capabilities.canRender(r.format)) {
             col.addView(ui.space(8));
-            col.addView(ui.button(R.string.pages_open, Ui.TONAL, R.drawable.ic_file, new View.OnClickListener() {
+            int label = Capabilities.isPresentation(r.format) ? R.string.slides_open : R.string.pages_open;
+            col.addView(ui.button(label, Ui.TONAL, R.drawable.ic_file, new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     act.push(MainActivity.Route.PAGES);
@@ -448,7 +447,7 @@ public final class ResultScreen extends Screen {
             }
             rows.add(groupHeader(Labels.category(act, cat) + " · " + idx.size()));
             for (int i : idx) {
-                rows.add(findingCard(r.findings.get(i), i));
+                rows.add(findingCard(r.findings.get(i)));
                 placed.add(i);
             }
         }
@@ -461,7 +460,7 @@ public final class ResultScreen extends Screen {
         if (!other.isEmpty()) {
             rows.add(groupHeader(ui.str(R.string.category_other) + " · " + other.size()));
             for (int i : other) {
-                rows.add(findingCard(r.findings.get(i), i));
+                rows.add(findingCard(r.findings.get(i)));
             }
         }
         appendChunked(col, rows);
@@ -511,7 +510,7 @@ public final class ResultScreen extends Screen {
         return t;
     }
 
-    private View findingCard(final Model.Finding f, final int index) {
+    private View findingCard(final Model.Finding f) {
         final LinearLayout card = ui.card();
         card.setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12));
         LinearLayout.LayoutParams lp = ui.fillWidth();
@@ -530,44 +529,23 @@ public final class ResultScreen extends Screen {
             card.addView(ui.space(6));
             card.addView(ui.pill(ui.str(R.string.blocked), R.color.arca_safe, R.color.arca_safe_container));
         }
+        card.addView(ui.space(8));
+        card.addView(ui.text(Labels.threatText(act, f.kind), Ui.BODY));
+        addMacroIntent(card, f);
         if (!f.detail.isEmpty()) {
             card.addView(ui.space(6));
+            card.addView(ui.text(R.string.finding_evidence, Ui.CAPTION));
             TextView d = ui.text(Fmt.clip(Fmt.safe(f.detail), 600), Ui.MONO);
             d.setTextIsSelectable(true);
             card.addView(d);
         }
         if (!f.location.isEmpty()) {
             card.addView(ui.space(4));
+            card.addView(ui.text(R.string.finding_location, Ui.CAPTION));
             TextView l = ui.text(Fmt.clip(Fmt.safe(f.location), 300), Ui.CAPTION);
-            l.setEllipsize(TextUtils.TruncateAt.MIDDLE);
-            l.setMaxLines(2);
+            l.setTextIsSelectable(true);
             card.addView(l);
         }
-        addMacroIntent(card, f);
-        final TextView explain = ui.text(Labels.threatText(act, f.kind), Ui.SMALL);
-        explain.setPadding(0, ui.dp(8), 0, 0);
-        explain.setVisibility(OPEN.contains(index) ? View.VISIBLE : View.GONE);
-        card.addView(explain);
-        final TextView hint = ui.text(OPEN.contains(index) ? R.string.hide_explanation : R.string.show_explanation, Ui.CAPTION);
-        hint.setTextColor(ui.color(R.color.arca_primary));
-        hint.setPadding(0, ui.dp(8), 0, 0);
-        card.addView(hint);
-
-        card.setClickable(true);
-        card.setFocusable(true);
-        card.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                boolean open = !OPEN.contains(index);
-                if (open) {
-                    OPEN.add(index);
-                } else {
-                    OPEN.remove(index);
-                }
-                explain.setVisibility(open ? View.VISIBLE : View.GONE);
-                hint.setText(open ? R.string.hide_explanation : R.string.show_explanation);
-            }
-        });
         return card;
     }
 

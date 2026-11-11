@@ -1,5 +1,14 @@
 # Arca: notes for working in this repository
 
+## Reporting findings
+
+- Record every confirmed problem in an Issue in the affected GitHub repository, even if it is
+  fixed during the same task. Reuse an existing Issue for the same problem and add new evidence
+  there. Include the affected version, observed behavior and user impact.
+- If disclosure could create a security risk or harm the reputation of the project or team,
+  report the problem privately via GitHub Security Insights (Security → Advisories) instead of
+  opening a public Issue.
+
 ## Build environment (do not probe for toolchains)
 
 - The host is Windows with `git.exe`. It has **no** Rust, Cargo, Android SDK/NDK, and **no** `gh` CLI.

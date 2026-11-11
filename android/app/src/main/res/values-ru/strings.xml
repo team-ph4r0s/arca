@@ -23,8 +23,8 @@
     <string name="technical_label">Технические подробности</string>
 
     <!-- Главный экран -->
-    <string name="home_tagline">Безопасно открывайте заражённые документы</string>
-    <string name="home_blurb">Выберите документ. Arca проверит его в изолированной песочнице, у которой нет доступа к вашим файлам, сети и другим приложениям, покажет, что в нём спрятано, и выведет безопасный просмотр обычным текстом. Ничто из документа не запускается.</string>
+    <string name="home_tagline">Проверка и просмотр документов</string>
+    <string name="home_blurb">Выберите файл. Arca проверит его в изолированной песочнице, объяснит находки и покажет предпросмотр для поддерживаемых форматов. Макросы и сценарии остаются неактивными.</string>
     <string name="home_open">Открыть документ</string>
     <string name="home_drop_hint">Файл можно также перетащить в это окно или отправить в Arca из другого приложения.</string>
     <string name="home_engine_ready">Песочница готова</string>
@@ -125,8 +125,15 @@
     <string name="show_more">Показать ещё (осталось %1$d)</string>
     <string name="category_other">Прочее</string>
     <string name="blocked">Заблокировано</string>
-    <string name="show_explanation">Пояснить</string>
-    <string name="hide_explanation">Скрыть</string>
+    <string name="slides_title">Слайды</string>
+    <string name="slides_open">Открыть слайды</string>
+    <string name="slides_prev">Предыдущий слайд</string>
+    <string name="slides_next">Следующий слайд</string>
+    <string name="slides_position">Слайд %1$d из %2$d</string>
+    <string name="slides_loading">Отрисовка слайда…</string>
+    <string name="slides_failed">Не удалось отобразить слайд.</string>
+    <string name="finding_evidence">Что обнаружила Arca</string>
+    <string name="finding_location">Расположение в файле</string>
     <string name="macros_note">Исходный текст каждого макроса показан для чтения. Здесь он не может выполняться.</string>
     <string name="macro_autoexec">Запускается сам при открытии документа</string>
     <string name="macro_suspicious">Подозрительные вызовы</string>
@@ -168,8 +175,8 @@
     <string name="search_close">Закрыть поиск</string>
     <string name="search_filter">Только найденное</string>
     <string name="search_filter_desc">Показывать только подходящие строки</string>
-    <string name="pictures_show">Показывать картинки в тексте</string>
-    <string name="pictures_hide">Скрыть картинки в тексте</string>
+    <string name="pictures_show">Показать изображения</string>
+    <string name="pictures_hide">Скрыть изображения</string>
     <string name="grid_header_desc">Названия столбцов</string>
     <string name="search_count">%1$d из %2$d</string>
     <string name="search_count_capped">%1$d из %2$d+</string>
@@ -350,7 +357,7 @@
     <string name="pages_failed">Эту страницу нарисовать не вышло.</string>
     <string name="pages_too_large">Страница слишком велика для показа</string>
     <string name="pages_note_truncated">Страница очень сложная, часть её не показана.</string>
-    <string name="pages_note_approx">Градиенты и узоры показаны плоским цветом, картинки — серыми прямоугольниками (нажмите, чтобы открыть), шрифты заменены.</string>
+    <string name="pages_note_approx">Arca упрощает заливки и заменяет шрифты. Нажмите на изображение или его заглушку, чтобы открыть его.</string>
     <string name="pages_note_visio">Эффекты 3D не отображаются: фигуры показаны плоскими.</string>
     <string name="fold_dock_label">Элементы управления у сгиба</string>
     <string name="image_show">Показать картинку</string>

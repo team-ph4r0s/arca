@@ -25,8 +25,8 @@
     <string name="technical_label">Technical details</string>
 
     <!-- Start screen -->
-    <string name="home_tagline">Open infected documents safely</string>
-    <string name="home_blurb">Choose a document. Arca inspects it inside an isolated sandbox that has no access to your files, network or other apps, shows what is hidden in it, and displays a safe preview as plain text. Nothing in the document is ever run.</string>
+    <string name="home_tagline">Inspect and preview documents</string>
+    <string name="home_blurb">Choose a file. Arca checks it in an isolated sandbox, explains what it finds and shows a preview for supported formats. Macros and scripts stay inactive.</string>
     <string name="home_open">Open a document</string>
     <string name="home_drop_hint">You can also drop a file onto this window or share it to Arca from another app.</string>
     <string name="home_engine_ready">Sandbox is ready</string>
@@ -127,8 +127,15 @@
     <string name="show_more">Show more (%1$d left)</string>
     <string name="category_other">Other</string>
     <string name="blocked">Blocked</string>
-    <string name="show_explanation">Explain</string>
-    <string name="hide_explanation">Hide</string>
+    <string name="slides_title">Slides</string>
+    <string name="slides_open">Open slides</string>
+    <string name="slides_prev">Previous slide</string>
+    <string name="slides_next">Next slide</string>
+    <string name="slides_position">Slide %1$d of %2$d</string>
+    <string name="slides_loading">Rendering slide…</string>
+    <string name="slides_failed">Couldn’t render this slide.</string>
+    <string name="finding_evidence">What Arca found</string>
+    <string name="finding_location">Location in the file</string>
     <string name="macros_note">The source of every macro is shown as text for you to read. It cannot run here.</string>
     <string name="macro_autoexec">Runs on its own when the document opens</string>
     <string name="macro_suspicious">Suspicious calls</string>
@@ -170,8 +177,8 @@
     <string name="search_close">Close search</string>
     <string name="search_filter">Only matches</string>
     <string name="search_filter_desc">Show only the rows that match</string>
-    <string name="pictures_show">Show pictures in the text</string>
-    <string name="pictures_hide">Hide pictures in the text</string>
+    <string name="pictures_show">Show images</string>
+    <string name="pictures_hide">Hide images</string>
     <string name="grid_header_desc">Column names</string>
     <string name="search_count">%1$d of %2$d</string>
     <string name="search_count_capped">%1$d of %2$d+</string>
@@ -354,7 +361,7 @@
     <string name="pages_failed">This page could not be drawn.</string>
     <string name="pages_too_large">Page too large to show</string>
     <string name="pages_note_truncated">The page is very complex; part of it is not shown.</string>
-    <string name="pages_note_approx">Gradients and patterns are shown as flat colours, pictures as grey boxes (tap one to open it), fonts are replaced.</string>
+    <string name="pages_note_approx">Arca simplifies fills and substitutes fonts. Tap an image or its placeholder to open it.</string>
     <string name="pages_note_visio">3-D effects are not displayed: the shapes are drawn flat.</string>
     <string name="fold_dock_label">Controls beside the fold</string>
     <string name="image_show">Show picture</string>

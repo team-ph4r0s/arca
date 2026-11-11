@@ -410,7 +410,8 @@ public final class PreviewScreen extends Screen {
         }));
         row.addView(new View(act), new LinearLayout.LayoutParams(0, 1, 1f));
         if (meta.format != null && Capabilities.canRender(meta.format)) {
-            row.addView(ui.button(R.string.pages_bar_pages, Ui.TONAL, R.drawable.ic_file, new View.OnClickListener() {
+            int label = Capabilities.isPresentation(meta.format) ? R.string.slides_title : R.string.pages_bar_pages;
+            row.addView(ui.button(label, Ui.TONAL, R.drawable.ic_file, new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     act.push(MainActivity.Route.PAGES);
