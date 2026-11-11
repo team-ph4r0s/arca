@@ -114,7 +114,8 @@ jobs:
           mkdir -p out
           for image in ubuntu:22.04 debian:bookworm; do
             label="${image//[:\/]/-}"
-            docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" "$image" \
+            # Use the runner's DNS instead of Docker's bridge DNS for package and toolchain downloads.
+            docker run --rm --network host -v "$PWD:/src:ro" -v "$PWD/out:/out" "$image" \
               bash /src/tools/repro-guest-container.sh "$label" /out
           done
       - name: compare the SHA-256 of the two builds

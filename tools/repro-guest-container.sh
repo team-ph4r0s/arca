@@ -8,7 +8,7 @@
 # The CI job `reproducible-guest` runs this in two different distributions and fails unless the
 # two hashes are equal (see docs/RELEASING.md).
 #
-#   docker run --rm -v "$PWD:/src:ro" -v "$PWD/out:/out" ubuntu:22.04 \
+#   docker run --rm --network host -v "$PWD:/src:ro" -v "$PWD/out:/out" ubuntu:22.04 \
 #       bash /src/tools/repro-guest-container.sh ubuntu-22.04 /out
 set -euo pipefail
 
@@ -16,7 +16,7 @@ label="${1:?usage: repro-guest-container.sh <label> <outdir>}"
 outdir="${2:?usage: repro-guest-container.sh <label> <outdir>}"
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
+apt-get update -qq -o APT::Update::Error-Mode=any -o Acquire::Retries=3
 # build-essential is only the host linker for build scripts; no C code is compiled into the guest.
 apt-get install -y -qq --no-install-recommends ca-certificates curl build-essential git >/dev/null
 
