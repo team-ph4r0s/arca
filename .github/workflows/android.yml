@@ -261,6 +261,11 @@ jobs:
           core="${ver%%[-+]*}"; extra=""; IFS=. read -r a b c extra <<<"$core"
           [[ "${a:-}" =~ ^[0-9]+$ && "${b:-}" =~ ^[0-9]+$ && "${c:-}" =~ ^[0-9]+$ && -z "$extra" ]] \
             || { echo "tag $GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH" >&2; exit 1; }
+          # build-apk.sh now writes the tag's version into the package (aapt2 --replace-version):
+          # a tag on a commit whose manifest names another version is a mistake, not a release.
+          manifest_ver="$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' android/app/src/main/AndroidManifest.xml | head -n1)"
+          [ "$manifest_ver" = "$core" ] \
+            || { echo "tag $GITHUB_REF_NAME does not match versionName $manifest_ver in the manifest" >&2; exit 1; }
           [ "${#a}" -le 4 ] && [ "${#b}" -le 3 ] && [ "${#c}" -le 3 ] \
             || { echo "tag $GITHUB_REF_NAME: component out of range (MINOR and PATCH at most 999)" >&2; exit 1; }
           # versionCode: MAJOR*1000000 + MINOR*1000 + PATCH (pre-release suffix ignored).
