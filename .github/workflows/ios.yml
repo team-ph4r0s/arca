@@ -68,7 +68,20 @@ jobs:
           rustup target add wasm32-unknown-unknown aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
       - name: Install XcodeGen (makes the Xcode project from app/project.yml)
-        run: brew install xcodegen
+        # A fixed release, checked against the SHA-256 GitHub records for the asset.
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/xcodegen"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $dir/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$dir/xcodegen.zip" -d "$dir"
+          echo "$dir/xcodegen/bin" >> "$GITHUB_PATH"
+          "$dir/xcodegen/bin/xcodegen" --version
 
       - name: Build WebAssembly isolated guest
         run: bash tools/build-guest.sh
