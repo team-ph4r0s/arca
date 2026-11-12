@@ -558,6 +558,16 @@ macOS и Xcode 15+. Rust-часть `arca-ffi` входит в общий worksp
 * зависимости содержат внутренний `unsafe` (`wasmi`, `quick-xml`, `memchr`,
   `zeroize`). `forbid(unsafe_code)` распространяется на код Arca; доверие к
   зависимостям — осознанное и минимальное, их список — вся доверенная база.
+* **Что в `Cargo.lock`, но не в сборке.** `Cargo.lock` перечисляет и необязательные зависимости,
+  которые ни одна включённая фича не активирует. Так, `string-interner` (с `serde`, `serde_core`,
+  `serde_derive`, `syn`) — необязательная зависимость `wasmi_collections`, а `hashbrown` 0.15.5 и
+  0.17.1 приходят только через неё и через необязательный `indexmap`: `cargo tree --target all
+  -i string-interner` и `-i hashbrown@…` ничего не показывают, в граф сборки (и в гостя) они не
+  входят. Поэтому `cargo deny check bans` с `multiple-versions = "deny"` проходит: cargo-deny
+  смотрит граф с учётом фич (`all-features = false` в `deny.toml`), а не весь `Cargo.lock`.
+  Отключить `serde` у `string-interner` через `wasmi` нечем и не нужно: фича `wasmi_collections`,
+  которая её тянет, выключена (`wasmi` с `default-features = false`). Если обновление `wasmi`
+  включит её, `cargo tree -i string-interner` это покажет, а `bans` — две версии `hashbrown`.
 
 ## 8. Решения и отклонения
 
