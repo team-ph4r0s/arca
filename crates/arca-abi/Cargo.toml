@@ -1,6 +1,6 @@
 [package]
 name = "arca-abi"
-description = "Arca Wasm guest ABI v8: export names, status codes and a bounded binary wire codec"
+description = "Arca Wasm guest ABI v9: export names, status codes and a bounded binary wire codec"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

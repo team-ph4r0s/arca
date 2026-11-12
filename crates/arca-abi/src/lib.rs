@@ -43,7 +43,7 @@ pub mod request;
 pub mod wire;
 
 /// Version of the guest ABI described in this crate.
-pub const ABI_VERSION: i32 = 8;
+pub const ABI_VERSION: i32 = 9;
 
 /// Names of the items a guest must export.
 pub mod exports {
@@ -92,6 +92,11 @@ pub mod status {
     /// Success: the document was encrypted but needed no password (a PDF that only restricts
     /// editing); the result is about the decrypted content.
     pub const OK_UNLOCKED: i32 = 11;
+    /// A sterile copy of a document that was encrypted would be written without its encryption:
+    /// the guest refuses unless the request carries
+    /// [`flags::ALLOW_DECRYPTED_COPY`](crate::request::flags::ALLOW_DECRYPTED_COPY), i.e. the
+    /// reader was told and agreed (ABI 9).
+    pub const DECRYPTED_COPY_REFUSED: i32 = 12;
 
     /// Whether `code` means that the output envelope holds a successful result.
     #[must_use]

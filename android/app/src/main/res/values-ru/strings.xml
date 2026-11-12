@@ -58,9 +58,15 @@
     <string name="err_unsupported_title">Не поддерживаемый документ</string>
     <string name="err_unsupported_text">Arca не умеет читать такой тип файлов и ничего из него не показывает. Файл не открывался и не запускался.</string>
     <string name="err_encrypted_title">Документ зашифрован</string>
-    <string name="err_encrypted_text">Содержимое защищено паролем, поэтому без него проверить его нельзя. Arca спрашивает пароль только чтобы открыть файл внутри песочницы; он нигде не сохраняется, и Arca никогда не пытается его подобрать.</string>
+    <string name="err_encrypted_text">Содержимое защищено паролем, поэтому без него проверить его нельзя. Arca спрашивает пароль только чтобы открыть файл внутри песочницы; он нигде не сохраняется. Сама Arca пробует только пароль, который Excel ставит без спроса («VelvetSweatshop»), — так же, как сам Excel.</string>
     <string name="err_wrong_password_title">Неверный пароль</string>
     <string name="err_wrong_password_text">Этот пароль не открывает документ. Ничего не было открыто.</string>
+    <string name="err_decrypted_copy_title">Копия не будет зашифрована</string>
+    <string name="err_decrypted_copy_text">Этот документ открыт паролем. Его стерильная копия сохранится без этого пароля: прочитать её сможет любой, к кому она попадёт. Arca делает такую копию только с вашего согласия.</string>
+    <string name="sanitize_decrypted_warning_title">Стерильная копия не будет зашифрована</string>
+    <string name="sanitize_decrypted_warning_text">Оригинал защищён паролем (или паролем, который Excel ставит сам). Стерильная копия создаётся из расшифрованного содержимого и откроется без пароля. Храните её там, куда есть доступ только у вас, или не создавайте её.</string>
+    <string name="sanitize_decrypted_agree">Понимаю: создать копию без шифрования</string>
+    <string name="sanitize_decrypted_done">Эта копия не зашифрована: она открывается без пароля.</string>
     <string name="password_card_title">Защищён паролем</string>
     <string name="password_card_text">Если вы знаете пароль, Arca откроет файл внутри песочницы и проверит, что в нём. Пароль используется один раз, хранится только в памяти и стирается, когда вы закрываете документ.</string>
     <string name="password_button">Ввести пароль</string>

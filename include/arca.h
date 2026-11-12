@@ -74,7 +74,9 @@ typedef enum ArcaStatus {
     /** @brief Engine has not been initialized yet. */
     ARCA_STATUS_NOT_READY = 13,
     /** @brief Document is encrypted and the provided password failed. */
-    ARCA_STATUS_WRONG_PASSWORD = 14
+    ARCA_STATUS_WRONG_PASSWORD = 14,
+    /** @brief The sterile copy of a document opened with a password would not be encrypted; run again with `ARCA_FLAG_ALLOW_DECRYPTED_COPY` once the user agreed. */
+    ARCA_STATUS_DECRYPTED_COPY_REFUSED = 15
 } ArcaStatus;
 
 /* -------------------------------------------------------------------------- */
@@ -118,6 +120,9 @@ typedef enum ArcaOp {
 
 /** @brief Sanitize flag: retain up to 16 megapixels for pictures instead of 4 megapixels. */
 #define ARCA_FLAG_FULL_SIZE 16
+
+/** @brief Sanitize flag: the user agreed that the sterile copy of a document opened with a password is written without encryption (ABI 9). */
+#define ARCA_FLAG_ALLOW_DECRYPTED_COPY 32
 
 /** @brief Preview flag: extract hidden text/sheets/slides marked as hidden. */
 #define ARCA_FLAG_REVEAL_HIDDEN 1

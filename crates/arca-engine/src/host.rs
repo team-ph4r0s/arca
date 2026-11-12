@@ -69,6 +69,10 @@ pub enum Status {
     NotReady = 13,
     /// The document is encrypted and the password does not open it.
     WrongPassword = 14,
+    /// The sterile copy of a document that was opened with a password (or a built-in one) would
+    /// be written without encryption, and the request did not carry the reader's consent
+    /// (`flags::ALLOW_DECRYPTED_COPY`). Ask, then run again with the flag.
+    DecryptedCopyRefused = 15,
 }
 
 impl Status {
@@ -217,6 +221,7 @@ fn classify_guest(code: i32) -> Status {
         guest_status::OPERATION_FAILED => Status::Failed,
         guest_status::ENCRYPTED => Status::Encrypted,
         guest_status::WRONG_PASSWORD => Status::WrongPassword,
+        guest_status::DECRYPTED_COPY_REFUSED => Status::DecryptedCopyRefused,
         _ => Status::Fault,
     }
 }

@@ -13,6 +13,7 @@ final class ArcaKitTests: XCTestCase {
         XCTAssertEqual(ArcaError(code: 6), .encrypted)
         XCTAssertEqual(ArcaError(code: 10), .badHandle)
         XCTAssertEqual(ArcaError(code: 14), .wrongPassword)
+        XCTAssertEqual(ArcaError(code: 15), .decryptedCopyRefused)
 
         XCTAssertEqual(ArcaError(handleOrCode: -10), .badHandle)
         XCTAssertEqual(ArcaError(handleOrCode: 42), .ok)

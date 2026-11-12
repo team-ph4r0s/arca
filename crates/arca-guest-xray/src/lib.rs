@@ -101,6 +101,16 @@ pub fn process(input: &[u8]) -> (i32, Vec<u8>) {
             }
             seal(PayloadKind::XRayReport, &report, "could not encode the X-ray report")
         }
+        Op::Sanitize if success != status::OK && req.flags & flags::ALLOW_DECRYPTED_COPY == 0 => {
+            // The copy would be written from the decrypted content, without the encryption the
+            // reader's file has: never without the reader's explicit agreement.
+            return (
+                status::DECRYPTED_COPY_REFUSED,
+                error_envelope(
+                    "the document was opened with a password or a built-in one; its sterile copy would not be encrypted: ask the reader and send ALLOW_DECRYPTED_COPY",
+                ),
+            );
+        }
         Op::Sanitize => sanitize(&document, req.flags),
         Op::Preview => preview(&document, req.flags),
         Op::Render => render(&document, req.flags),
@@ -820,8 +830,16 @@ mod tests {
         let (kind, payload) = open(&env);
         let p = decode_preview(kind, payload).unwrap();
         assert!(format!("{:?}", p.sections).contains("Квартальный отчёт"));
-        let (code, env) =
+        // Without the reader's consent the copy (which would not be encrypted) is refused.
+        let (code, _) =
             process(&with_password(Op::Sanitize, flags::SANITIZE_ALL, "пароль-123", &enc));
+        assert_eq!(code, status::DECRYPTED_COPY_REFUSED);
+        let (code, env) = process(&with_password(
+            Op::Sanitize,
+            flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY,
+            "пароль-123",
+            &enc,
+        ));
         assert_eq!(code, status::OK_DECRYPTED);
         let (kind, payload) = open(&env);
         let sd = decode_sanitized(kind, payload).unwrap();
@@ -864,7 +882,10 @@ mod tests {
             decode_preview(kind, payload).unwrap().sections.len(),
             decode_preview(direct_kind, direct_payload).unwrap().sections.len()
         );
-        let (code, env) = process(&request_for(Op::Sanitize, flags::SANITIZE_ALL, &enc));
+        let (code, _) = process(&request_for(Op::Sanitize, flags::SANITIZE_ALL, &enc));
+        assert_eq!(code, status::DECRYPTED_COPY_REFUSED, "the built-in password needs consent too");
+        let consented = flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY;
+        let (code, env) = process(&request_for(Op::Sanitize, consented, &enc));
         assert_eq!(code, status::OK_UNLOCKED);
         let (kind, payload) = open(&env);
         assert_eq!(decode_sanitized(kind, payload).unwrap().format, FileFormat::Xlsx);
@@ -1011,8 +1032,15 @@ mod tests {
             process(&with_password(Op::Preview, 0, "user-256", &locked)).0,
             status::OK_DECRYPTED
         );
-        let (code, env) =
+        let (code, _) =
             process(&with_password(Op::Sanitize, flags::SANITIZE_ALL, "user-256", &locked));
+        assert_eq!(code, status::DECRYPTED_COPY_REFUSED);
+        let (code, env) = process(&with_password(
+            Op::Sanitize,
+            flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY,
+            "user-256",
+            &locked,
+        ));
         assert_eq!(code, status::OK_DECRYPTED);
         let (kind, payload) = open(&env);
         assert_eq!(decode_sanitized(kind, payload).unwrap().format, FileFormat::Pdf);
