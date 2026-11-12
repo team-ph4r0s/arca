@@ -15,7 +15,7 @@ options:
   deploymentTarget:
     iOS: "16.0"
   # The project file format of Xcode 15.3: XcodeGen's default (xcode16_0, object version 77) cannot be
-  # opened by Xcode 15.4, which is what the macos-14 CI runner and the stated minimum use.
+  # opened by Xcode 15.4, the stated minimum (CI builds on macos-15).
   projectFormat: xcode15_3
   createIntermediateGroups: true
   generateEmptyDirectories: false

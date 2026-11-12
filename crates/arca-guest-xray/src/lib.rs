@@ -3,9 +3,9 @@
 
 //! # arca-guest-xray
 //!
-//! The parser guest implementing [`arca_abi`] version 5: Threat X-Ray
-//! (`Scan`), one-tap sterilisation (`Sanitize`) and the read-only content
-//! preview (`Preview`) in one module. Built for `wasm32-unknown-unknown` it is
+//! The parser guest implementing the current [`arca_abi`] version ([`arca_abi::ABI_VERSION`]): Threat X-Ray
+//! (`Scan`), one-tap sterilisation (`Sanitize`), the read-only content
+//! preview (`Preview`), page drawings (`Render`) and pictures (`Image`) in one module. Built for `wasm32-unknown-unknown` it is
 //! a module with **zero imports**: it can compute, and nothing else.
 //!
 //! ```text
