@@ -572,46 +572,16 @@ public final class MainActivity extends Activity implements Session.Listener, En
         if (uri == null) {
             return;
         }
-        String scheme = uri.getScheme();
-        if (!"content".equals(scheme) && !"file".equals(scheme)) {
-            Toast.makeText(this, R.string.unsupported_source, Toast.LENGTH_LONG).show();
-            return;
-        }
-        if ("file".equals(scheme) && !isReadableDocumentFile(uri)) {
+        // Only content: addresses. The activity is exported, so any app can send it any address;
+        // a file: path would be checked here and opened later (a window for swapping the file
+        // behind it), and could point into Arca's own storage. A document from storage arrives
+        // through the system picker or a document provider as content: anyway.
+        if (!"content".equals(uri.getScheme())) {
             Toast.makeText(this, R.string.unsupported_source, Toast.LENGTH_LONG).show();
             return;
         }
         // The intent must not start the same scan again after a configuration-driven re-creation.
         setIntent(new Intent());
         openDocument(uri, intent.getType());
-    }
-
-    /**
-     * A file: address is accepted only for a regular file outside the app's own storage and the
-     * kernel's pseudo file systems. The manifest does not even advertise file:, but this activity
-     * is exported, so any app can send it one; the canonical path defeats ../ and symlink tricks.
-     */
-    private boolean isReadableDocumentFile(Uri uri) {
-        String path = uri.getPath();
-        if (path == null || path.isEmpty()) {
-            return false;
-        }
-        try {
-            java.io.File file = new java.io.File(path).getCanonicalFile();
-            String canonical = file.getPath();
-            String[] blocked = {
-                getDataDir().getCanonicalPath(),
-                createDeviceProtectedStorageContext().getDataDir().getCanonicalPath(),
-                "/proc", "/sys", "/dev"
-            };
-            for (String b : blocked) {
-                if (canonical.equals(b) || canonical.startsWith(b + "/")) {
-                    return false;
-                }
-            }
-            return file.isFile();
-        } catch (java.io.IOException | RuntimeException e) {
-            return false;
-        }
     }
 }

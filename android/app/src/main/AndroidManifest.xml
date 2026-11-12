@@ -6,7 +6,8 @@
      (arca-devtools check-resources and build-apk.sh enforce an empty list). The app opens a document
      that the system hands it (a content:// address or a file picked by the person) and nothing
      else, so there is no network channel for a malicious document to use. The VIEW filters are
-     not BROWSABLE (a web page cannot start the app) and accept content:// only. -->
+     not BROWSABLE (a web page cannot start the app) and accept content:// only; MainActivity refuses
+     every other scheme in code too (it is exported, so any app can send it a file:// path). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.arca.viewer"
     android:versionCode="8000"
