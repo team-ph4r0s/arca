@@ -109,10 +109,44 @@ pub fn process(input: &[u8]) -> (i32, Vec<u8>) {
     if code == status::OK { (success, envelope) } else { (code, envelope) }
 }
 
-/// Whether `data` is a PDF that declares an encryption dictionary.
+/// Whether `data` is a PDF that declares an encryption dictionary. The key is matched as a PDF
+/// name with its `#xx` escapes decoded, as a reader decodes it: `/Encr#79pt` is `/Encrypt`.
 fn is_encrypted_pdf(data: &[u8]) -> bool {
     data.get(..data.len().min(1024)).is_some_and(|h| h.windows(5).any(|w| w == b"%PDF-"))
-        && data.windows(8).any(|w| w == b"/Encrypt")
+        && (data.windows(8).any(|w| w == b"/Encrypt") || has_escaped_name(data, b"Encrypt"))
+}
+
+/// Whether some `/Name` token of `data` with at least one `#xx` escape decodes to `want`.
+fn has_escaped_name(data: &[u8], want: &[u8]) -> bool {
+    let ends = |b: u8| b.is_ascii_whitespace() || b"\0()<>[]{}/%".contains(&b);
+    let mut rest = data;
+    while let Some(at) = rest.iter().position(|&b| b == b'/') {
+        rest = rest.get(at + 1..).unwrap_or_default();
+        let len = rest.iter().position(|&b| ends(b)).unwrap_or(rest.len()).min(3 * want.len());
+        let token = rest.get(..len).unwrap_or_default();
+        if !token.contains(&b'#') {
+            continue;
+        }
+        let mut name = Vec::with_capacity(token.len());
+        let mut i = 0;
+        while let Some(&b) = token.get(i) {
+            let hex = token.get(i + 1..i + 3).and_then(|h| core::str::from_utf8(h).ok());
+            match hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                Some(v) if b == b'#' => {
+                    name.push(v);
+                    i += 3;
+                }
+                _ => {
+                    name.push(b);
+                    i += 1;
+                }
+            }
+        }
+        if name == want {
+            return true;
+        }
+    }
+    false
 }
 
 /// A document ready to be worked on.
@@ -830,6 +864,23 @@ mod tests {
         // A password given for a file that needs none changes nothing.
         let (code, _) = process(&with_password(Op::Preview, 0, "x", &fixture("report.docx")));
         assert_eq!(code, status::OK);
+    }
+
+    #[test]
+    fn an_encryption_key_written_with_escapes_still_opens_with_the_password() {
+        // `/Encr#79pt` is the name `/Encrypt` to every PDF reader; the password must not be
+        // ignored because the key is spelled with an escape.
+        let plain = fixture("enc-aes-128.pdf");
+        let at = plain.windows(8).position(|w| w == b"/Encrypt").unwrap();
+        let mut escaped = plain.clone();
+        escaped.splice(at..at + 8, b"/Encr#79pt".iter().copied());
+        let (code, _) = process(&with_password(Op::Scan, 0, "pässword", &escaped));
+        assert_eq!(code, status::OK_DECRYPTED);
+        let (code, _) = process(&with_password(Op::Preview, 0, "pässword", &escaped));
+        assert_eq!(code, status::OK_DECRYPTED);
+        // A name that only looks alike is not the key.
+        assert!(!has_escaped_name(b"%PDF-1.7 /Encr#79ptx 1", b"Encrypt"));
+        assert!(has_escaped_name(b"%PDF-1.7 /#45#6E#63#72#79#70#74 1", b"Encrypt"));
     }
 
     #[test]
