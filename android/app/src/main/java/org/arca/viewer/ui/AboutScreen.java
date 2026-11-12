@@ -104,6 +104,34 @@ public final class AboutScreen extends Screen {
             col.addView(ui.space(8));
             col.addView(fact(ui.str(R.string.about_fingerprint), Fmt.grouped(about.fingerprint), true));
         }
+        String cert = signingCertificate();
+        if (!cert.isEmpty()) {
+            col.addView(ui.space(8));
+            col.addView(fact(ui.str(R.string.about_signing_cert), Fmt.grouped(cert), true));
+            col.addView(ui.text(R.string.about_signing_cert_hint, Ui.CAPTION));
+        }
+    }
+
+    /**
+     * SHA-256 of the certificate this installed copy is signed with (lower-case hex), or "" when
+     * the system does not say. Comparing it with the value published in the README tells an
+     * official build from a repackaged one.
+     */
+    private String signingCertificate() {
+        android.content.pm.Signature cert = Compat.signingCertificate(act);
+        if (cert == null) {
+            return "";
+        }
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(cert.toByteArray());
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException | RuntimeException e) {
+            return "";
+        }
     }
 
     /**

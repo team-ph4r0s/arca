@@ -15,8 +15,8 @@ constants in sync.
 
 Copyright © 2026 Pharos and contributors
 
-- Homepage: <https://github.com/Johnny-Wickky/arca>
-- Source: <https://github.com/Johnny-Wickky/arca>
+- Homepage: <https://github.com/team-ph4r0s/arca>
+- Source: <https://github.com/team-ph4r0s/arca>
 
 ### Creators of the original Arca core · Создатели оригинального ядра Arca
 

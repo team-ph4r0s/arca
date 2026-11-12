@@ -7,7 +7,7 @@
 **Office · OpenDocument · PDF · RTF · Outlook · Visio · Access · Картинки** — от нулевого доверия до стерильной копии.  
 100% Safe Rust, одноразовая Wasm-песочница без доступа к сети, объяснение поведения макросов и нулевая телеметрия.
 
-[![CI](https://img.shields.io/badge/CI-passing-2ea44f?style=flat-square&logo=github)](https://github.com/Johnny-Wickky/arca/actions)
+[![CI](https://github.com/team-ph4r0s/arca/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/team-ph4r0s/arca/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.97%20%7C%20Edition%202024-e43716?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![WebAssembly](https://img.shields.io/badge/Sandbox-wasmi%20%7C%20Wasm-654ff0?style=flat-square&logo=webassembly)](https://github.com/wasmi-labs/wasmi)
 [![ABI](https://img.shields.io/badge/ABI-v8-blue?style=flat-square)](#)
@@ -23,7 +23,7 @@
 [![Malware Lab](https://img.shields.io/badge/malware--lab-50%20attacks%20tested-orange?style=flat-square)](tests/malware-test/)
 [![License](https://img.shields.io/badge/license-GNU%20AGPLv3-gray?style=flat-square)](LICENSE)
 
-[**📥 Скачать APK (Releases)**](https://github.com/Johnny-Wickky/arca/releases) · [**🏗️ Архитектура**](docs/ARCHITECTURE.md) · [**🛡️ Модель угроз**](docs/SECURITY_THREAT_MODEL.md) · [**📱 Android**](docs/ANDROID.md) · [**🍏 iOS**](app/README.md) · [**🔬 Полигон атак**](tests/malware-test/README.md)
+[**📥 Скачать APK (Releases)**](https://github.com/team-ph4r0s/arca/releases) · [**🏗️ Архитектура**](docs/ARCHITECTURE.md) · [**🛡️ Модель угроз**](docs/SECURITY_THREAT_MODEL.md) · [**📱 Android**](docs/ANDROID.md) · [**🍏 iOS**](app/README.md) · [**🔬 Полигон атак**](tests/malware-test/README.md)
 
 </div>
 
@@ -36,7 +36,9 @@
 
 ## Быстрый старт и загрузка
 
-* **Android-приложение:** готовые подписанные пакеты доступны в [Releases](https://github.com/Johnny-Wickky/arca/releases) (поддерживаются Android 8–16, смартфоны, планшеты и складные устройства).
+* **Android-приложение:** готовые подписанные пакеты доступны в [Releases](https://github.com/team-ph4r0s/arca/releases) (поддерживаются Android 8–16, смартфоны, планшеты и складные устройства).
+  * **Подпись релизов:** SHA-256 сертификата, которым подписаны официальные APK (тот же, что в `arca-*.verify.txt` каждого релиза и на экране «О проекте» приложения):
+    `3b3b819dea6a02ffdea05ac7ce53df9b2bdf004dac3082c048557383cfaf737e`. Проверка: `apksigner verify --print-certs arca-X.Y.Z.apk`. Пакет с другим сертификатом — не официальная сборка.
   * **Распространение:** подписанный детерминированный APK в GitHub Releases. Публикация в каталогах F-Droid и Google Play запланирована.
   * **Автономность и обновления:** в приложении физически отсутствует сетевой стек (`INTERNET` permission отсутствует в манифесте) и нет самозагрузчиков. Обновление устанавливается вручную поверх существующего приложения при совпадении криптографической подписи релизного ключа.
   * **Проверка качества:** автоматизированные контрактные тесты, фаззинг и полигон вредоносных образцов выполняются в CI (см. [`docs/ANDROID.md`](docs/ANDROID.md)).

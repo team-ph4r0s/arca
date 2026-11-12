@@ -267,6 +267,8 @@
     <string name="about_homepage">Страница проекта</string>
     <string name="about_source">Исходный код</string>
     <string name="about_fingerprint">Отпечаток сведений об авторстве</string>
+    <string name="about_signing_cert">Сертификат подписи (SHA-256)</string>
+    <string name="about_signing_cert_hint">Официальные сборки Arca подписаны сертификатом, SHA-256 которого опубликован в README проекта на github.com/team-ph4r0s/arca. Если значения не совпадают, это не официальная сборка.</string>
 
     <!-- Лицензии -->
     <string name="licenses_agpl">AGPLv3</string>

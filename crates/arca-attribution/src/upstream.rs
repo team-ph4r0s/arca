@@ -40,10 +40,10 @@ pub struct DonationLink {
 pub const UPSTREAM_PROJECT: &str = "Arca";
 
 /// Homepage of the original project.
-pub const UPSTREAM_HOMEPAGE: &str = "https://github.com/Johnny-Wickky/arca";
+pub const UPSTREAM_HOMEPAGE: &str = "https://github.com/team-ph4r0s/arca";
 
 /// Where the original Corresponding Source is published.
-pub const UPSTREAM_SOURCE: &str = "https://github.com/Johnny-Wickky/arca";
+pub const UPSTREAM_SOURCE: &str = "https://github.com/team-ph4r0s/arca";
 
 /// Creators of the original Arca core.
 pub const UPSTREAM_AUTHORS: &[Author] = &[Author { name: "Pharos", url: None }];
