@@ -39,6 +39,7 @@ for test in NativeTest ContractTest StatsNativeTest; do
     java -Xcheck:jni -XX:+CheckJNICalls \
         --add-opens java.base/java.io=ALL-UNNAMED \
         -Djava.library.path="$target_dir/release" \
+        -Djava.io.tmpdir="$work" \
         -cp "$work" "$test" 2>&1 | grep -v '^Picked up JAVA_TOOL_OPTIONS' | tee "$log"
     status=${PIPESTATUS[0]}
     set -e
