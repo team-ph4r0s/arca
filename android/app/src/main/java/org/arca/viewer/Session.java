@@ -77,11 +77,24 @@ public final class Session {
     /** State of the page being drawn (the page view of a document). */
     public static final class PageState {
         public boolean running;
-        /** The page asked for (zero-based). */
+        /** The page being drawn, or the one drawn last (zero-based). */
         public int index;
+        /** The page drawn last (page {@link #index}), or {@code null}. */
         public org.arca.viewer.core.PageDrawing drawing;
+        /** Why page {@link #index} could not be drawn, or {@code null}. */
         public Failure failure;
+        /** The number of pages, once one page has been drawn (0 before). */
+        public int pages;
     }
+
+    /** Drawn pages kept for going back and forth (least recently used go first). */
+    private static final int PAGE_CACHE = 12;
+    private final java.util.LinkedHashMap<Integer, org.arca.viewer.core.PageDrawing> pageCache =
+        new java.util.LinkedHashMap<>(16, 0.75f, true);
+    /** Pages that could not be drawn, so they are not asked for again and again. */
+    private final java.util.Map<Integer, Failure> pageFailures = new java.util.HashMap<>();
+    /** Pages waiting to be drawn, the most wanted first. */
+    private final java.util.ArrayDeque<Integer> pageQueue = new java.util.ArrayDeque<>();
 
     /** State of the sterile copy of the current document. */
     public static final class SanitizeState {
@@ -95,6 +108,8 @@ public final class Session {
         public boolean saving;
         public boolean saved;
         public long savedBytes;
+        /** Where the sterile copy was saved (a document the person created), for sharing it; or {@code null}. */
+        public Uri savedUri;
         public Failure saveFailure;
 
         public boolean ready() {
@@ -753,6 +768,7 @@ public final class Session {
         sanitize.failure = null;
         sanitize.saving = false;
         sanitize.saved = false;
+        sanitize.savedUri = null;
         sanitize.savedBytes = 0;
         sanitize.saveFailure = null;
     }
@@ -852,32 +868,84 @@ public final class Session {
         }));
     }
 
+    /** Forgets every drawn page (another document, or the preview was reset). */
     private void resetPage() {
         page.running = false;
         page.drawing = null;
         page.failure = null;
+        page.pages = 0;
+        pageQueue.clear();
+        pageCache.clear();
+        pageFailures.clear();
     }
 
-    /** Forgets the drawn page (when the page view is left). */
+    /**
+     * Stops drawing (when the page view is left). The pages drawn so far stay in the small cache,
+     * so coming back to the page view shows them at once.
+     */
     public void closePage() {
         if (page.running) {
             cancel();
         }
         previewEpoch++;
-        resetPage();
+        page.running = false;
+        page.failure = null;
+        pageQueue.clear();
+        pageFailures.clear();
     }
 
-    /** Draws page {@code index} (zero-based) of the document in the sandbox. */
-    public void renderPage(final int index) {
-        if (phase != Phase.READY || page.running) {
+    /** Page {@code index} if it has been drawn and is still kept, else {@code null}. */
+    public org.arca.viewer.core.PageDrawing cachedPage(int index) {
+        return pageCache.get(index);
+    }
+
+    /** Why page {@code index} could not be drawn, or {@code null}. */
+    public Failure pageFailure(int index) {
+        return pageFailures.get(index);
+    }
+
+    /** Asks for page {@code index} again after it failed. */
+    public void retryPage(int index) {
+        pageFailures.remove(index);
+        renderPage(index);
+    }
+
+    /**
+     * Draws page {@code index} (zero-based) and then the one after it, so that turning the page is
+     * quick. A page asked for while another is being drawn is not lost: it is drawn next.
+     */
+    public void renderPage(int index) {
+        int next = index + 1;
+        requestPages(page.pages > 0 && next >= page.pages ? new int[] {index} : new int[] {index, next});
+    }
+
+    /**
+     * Asks for the pages in {@code order} (the most wanted first), replacing what was asked for
+     * before; pages already drawn, or that failed, are skipped. One page is drawn at a time.
+     */
+    public void requestPages(int[] order) {
+        pageQueue.clear();
+        for (int i : order) {
+            boolean known = page.pages == 0 || i < page.pages;
+            if (i >= 0 && known && !pageCache.containsKey(i) && !pageFailures.containsKey(i)
+                && !(page.running && page.index == i) && !pageQueue.contains(i)) {
+                pageQueue.add(i);
+            }
+        }
+        drawNextPage();
+    }
+
+    private void drawNextPage() {
+        if (phase != Phase.READY || page.running || pageQueue.isEmpty()) {
             return;
         }
+        final int index = pageQueue.poll();
         final int ep = epoch;
         final long d = docHandle();
-        resetPage();
         final int pep = ++previewEpoch;
         page.running = true;
         page.index = index;
+        page.failure = null;
         changed();
         worker.execute(guarded(new Runnable() {
             @Override
@@ -913,14 +981,9 @@ public final class Session {
                 post(new Runnable() {
                     @Override
                     public void run() {
-                        if (!current(ep) || pep != previewEpoch) {
-                            return;
+                        if (current(ep) && pep == previewEpoch) {
+                            pageDrawn(index, shown, failed);
                         }
-                        page.running = false;
-                        page.drawing = shown;
-                        boolean cancelled = failed != null && failed.status == Native.CANCELLED;
-                        page.failure = cancelled ? null : failed;
-                        changed();
                     }
                 });
             }
@@ -931,14 +994,34 @@ public final class Session {
                     @Override
                     public void run() {
                         if (current(ep) && pep == previewEpoch) {
-                            page.running = false;
-                            page.failure = new Failure(F_PARSE, t.toString());
-                            changed();
+                            pageDrawn(index, null, new Failure(F_PARSE, t.toString()));
                         }
                     }
                 });
             }
         }));
+    }
+
+    /** On the main thread: keeps the result of page {@code index} and starts the next wanted page. */
+    private void pageDrawn(int index, org.arca.viewer.core.PageDrawing drawing, Failure failed) {
+        page.running = false;
+        page.index = index;
+        page.drawing = drawing;
+        boolean cancelled = failed != null && failed.status == Native.CANCELLED;
+        page.failure = cancelled ? null : failed;
+        if (drawing != null) {
+            page.pages = Math.max(page.pages, drawing.pages);
+            pageCache.put(index, drawing);
+            while (pageCache.size() > PAGE_CACHE) {
+                java.util.Iterator<Integer> it = pageCache.keySet().iterator();
+                it.next();
+                it.remove();
+            }
+        } else if (page.failure != null) {
+            pageFailures.put(index, page.failure);
+        }
+        changed();
+        drawNextPage();
     }
 
     /** Loads one page of preview items (called on the page executor, blocking). */
@@ -1378,6 +1461,7 @@ public final class Session {
         final int sep = sanitizeEpoch;
         sanitize.saving = true;
         sanitize.saved = false;
+        sanitize.savedUri = null;
         sanitize.saveFailure = null;
         changed();
         worker.execute(guarded(new Runnable() {
@@ -1410,6 +1494,7 @@ public final class Session {
                         if (bytes >= 0) {
                             sanitize.saved = true;
                             sanitize.savedBytes = bytes;
+                            sanitize.savedUri = dest;
                             Stats.recordSterileCopy(app);
                         } else {
                             sanitize.saveFailure = new Failure((int) -bytes, why);

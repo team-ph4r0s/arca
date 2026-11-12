@@ -234,6 +234,17 @@ public final class SanitizeScreen extends Screen {
                 ok.addView(ui.text(ui.str(R.string.sanitize_saved, Fmt.size(st.savedBytes)), Ui.BODY));
                 col.addView(ok, ui.fillWidth());
                 col.addView(ui.space(12));
+                if (st.savedUri != null) {
+                    final android.net.Uri copy = st.savedUri;
+                    final String mime = Fmt.mimeOf(info.format);
+                    col.addView(ui.button(R.string.share_sterile, Ui.PRIMARY, R.drawable.ic_share, new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            Share.send(act, copy, mime, R.string.share_sterile);
+                        }
+                    }), ui.fillWidth());
+                    col.addView(ui.space(8));
+                }
             } else if (st.saveFailure != null) {
                 LinearLayout bad = ui.banner(R.color.arca_danger_container);
                 TextView t = ui.heading(ui.str(R.string.sanitize_save_failed), Ui.LABEL);
