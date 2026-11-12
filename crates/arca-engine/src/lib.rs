@@ -28,6 +28,8 @@ pub mod selftest;
 pub mod stats;
 pub mod support;
 
+/// The version of the guest ABI the engine speaks (re-exported for the platform bridges).
+pub use arca_abi::ABI_VERSION;
 pub use host::{
     Engine, EngineConfig, Handle, Host, PreparedGuest, RunOutput, Status, guest_digest_of, op,
 };

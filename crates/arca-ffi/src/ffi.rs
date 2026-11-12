@@ -1,3 +1,5 @@
+// SAFETY: the caller passes `len` readable bytes at `password` (or null with 0).
+// SAFETY: the caller passes `len` readable bytes at `data` (or null with 0).
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPLv3 section 7: see LICENSE_ADDITIONAL_TERMS.md in the repository root.
 
@@ -14,8 +16,8 @@
 //! [`arca_buffer_free`]. When freed, the buffer is securely wiped (`zeroize`) before release.
 
 #![allow(unsafe_code, reason = "this file is the C ABI boundary")]
+#![warn(clippy::undocumented_unsafe_blocks, clippy::missing_safety_doc)]
 
-use std::ffi::{CStr, c_char};
 use std::fs::File;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::null_mut;
@@ -30,7 +32,7 @@ use crate::api;
 /// When `data` is non-null, the caller owns the memory and must release it
 /// with [`arca_buffer_free`].
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct ArcaBuffer {
     /// Pointer to the byte array, or null if empty.
     pub data: *mut u8,
@@ -62,15 +64,32 @@ impl ArcaBuffer {
 /// Frees a buffer previously allocated and returned by Arca.
 ///
 /// Memory is securely wiped (`zeroize`) before being returned to the allocator.
+///
+/// # Safety
+///
+/// `buf` must be a buffer this library returned and that was not freed before (or an empty
+/// one); the caller must not use its pointer afterwards.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn arca_buffer_free(buf: ArcaBuffer) {
     if !buf.data.is_null() && buf.len > 0 {
-        // SAFETY: buf.data was allocated via Box::into_raw with length buf.len.
         let slice = core::ptr::slice_from_raw_parts_mut(buf.data, buf.len);
+        // SAFETY: buf.data was allocated via Box::into_raw with length buf.len (the caller
+        // guarantees it came from this library and was not freed before).
         let mut boxed: Box<[u8]> = unsafe { Box::from_raw(slice) };
         boxed.zeroize();
         drop(boxed);
     }
+}
+
+/// Clears `*out` (when it can be written) and answers [`Status::BadArgument`].
+fn reject(out: *mut ArcaBuffer) -> i32 {
+    if !out.is_null() {
+        // SAFETY: `out` is not null and, per the header, points to a writable `ArcaBuffer`.
+        unsafe {
+            *out = ArcaBuffer::empty();
+        }
+    }
+    Status::BadArgument.code()
 }
 
 fn guard<T>(fallback: T, f: impl FnOnce() -> T) -> T {
@@ -135,24 +154,22 @@ fn optional_buffer_result(out: *mut ArcaBuffer, f: impl FnOnce() -> Option<Vec<u
     })
 }
 
+/// The bytes `data[..len]`, or `None` for a null pointer with a non-zero length or a length no
+/// slice can have (more than `isize::MAX` bytes).
+///
+/// # Safety
+///
+/// When `data` is not null it must point to `len` readable bytes that stay valid and unchanged
+/// for the lifetime `'a`.
 unsafe fn slice_from_raw<'a>(data: *const u8, len: usize) -> Option<&'a [u8]> {
     if len == 0 {
         Some(&[])
-    } else if data.is_null() {
+    } else if data.is_null() || isize::try_from(len).is_err() {
         None
     } else {
         // SAFETY: caller guarantees data points to len valid bytes.
         Some(unsafe { core::slice::from_raw_parts(data, len) })
     }
-}
-
-unsafe fn str_from_c_str<'a>(ptr: *const c_char) -> Option<&'a str> {
-    if ptr.is_null() {
-        return None;
-    }
-    // SAFETY: ptr is a non-null, null-terminated C string.
-    let cstr = unsafe { CStr::from_ptr(ptr) };
-    cstr.to_str().ok()
 }
 
 /// Takes ownership of `fd`.
@@ -192,6 +209,13 @@ pub extern "C" fn arca_init(
     guard(Status::Fault.code(), || {
         api::init(max_input_mib, max_memory_mib, scan_secs, preview_secs)
     })
+}
+
+/// The version of the guest ABI this library was built with (`ARCA_ABI_VERSION` in arca.h): an
+/// app built against another header must refuse to start the engine.
+#[unsafe(no_mangle)]
+pub extern "C" fn arca_abi_version() -> i32 {
+    arca_engine::ABI_VERSION
 }
 
 /// Returns 1 if a WebAssembly guest was embedded at build time, 0 otherwise.
@@ -236,27 +260,11 @@ pub extern "C" fn arca_doc_new(max_bytes: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn arca_doc_append(doc: i64, data: *const u8, len: usize) -> i32 {
     guard(Status::Fault.code(), || {
+        // SAFETY: the caller passes `len` readable bytes at `data` (or null with 0).
         let Some(slice) = (unsafe { slice_from_raw(data, len) }) else {
             return Status::BadArgument.code();
         };
         api::doc_append(doc, slice)
-    })
-}
-
-/// Reads an entire file at `path` into the document.
-///
-/// Returns the number of bytes read or a negative `-status` code.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn arca_doc_read_file(doc: i64, path: *const c_char) -> i64 {
-    guard(-i64::from(Status::Fault.code()), || {
-        let Some(p) = (unsafe { str_from_c_str(path) }) else {
-            return -i64::from(Status::BadArgument.code());
-        };
-        let mut file = match File::open(p) {
-            Ok(f) => f,
-            Err(_) => return -i64::from(Status::Io.code()),
-        };
-        api::doc_read(doc, &mut file)
     })
 }
 
@@ -285,6 +293,7 @@ pub unsafe extern "C" fn arca_doc_read_fd(doc: i64, fd: i32) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn arca_doc_set_password(doc: i64, password: *const u8, len: usize) -> i32 {
     guard(Status::Fault.code(), || {
+        // SAFETY: the caller passes `len` readable bytes at `password` (or null with 0).
         let Some(slice) = (unsafe { slice_from_raw(password, len) }) else {
             return Status::BadArgument.code();
         };
@@ -422,26 +431,6 @@ pub unsafe extern "C" fn arca_outcome_sanitized_bytes(outcome: i64, out: *mut Ar
     buffer_result(out, || api::sanitized_bytes(outcome))
 }
 
-/// Writes the sterile copy directly to a file at `path`.
-///
-/// Returns byte count written or a negative `-status` code.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn arca_outcome_sanitized_write_file(
-    outcome: i64,
-    path: *const c_char,
-) -> i64 {
-    guard(-i64::from(Status::Fault.code()), || {
-        let Some(p) = (unsafe { str_from_c_str(path) }) else {
-            return -i64::from(Status::BadArgument.code());
-        };
-        let mut file = match File::create(p) {
-            Ok(f) => f,
-            Err(_) => return -i64::from(Status::Io.code()),
-        };
-        api::sanitized_write(outcome, &mut file)
-    })
-}
-
 /// Writes the sterile copy to a POSIX file descriptor and closes `fd`.
 ///
 /// Returns byte count written or a negative `-status` code.
@@ -486,7 +475,10 @@ pub unsafe extern "C" fn arca_passport(
     today: i32,
     out: *mut ArcaBuffer,
 ) -> i32 {
-    let rec = (unsafe { slice_from_raw(record, record_len) }).unwrap_or(&[]);
+    // SAFETY: the caller passes `record_len` readable bytes at `record` (or null with 0), see the header.
+    let Some(rec) = (unsafe { slice_from_raw(record, record_len) }) else {
+        return reject(out);
+    };
     buffer_result_direct(out, || api::passport(lang, rec, today))
 }
 
@@ -500,7 +492,10 @@ pub unsafe extern "C" fn arca_passport_update(
     active: i32,
     out: *mut ArcaBuffer,
 ) -> i32 {
-    let rec = (unsafe { slice_from_raw(record, record_len) }).unwrap_or(&[]);
+    // SAFETY: the caller passes `record_len` readable bytes at `record` (or null with 0), see the header.
+    let Some(rec) = (unsafe { slice_from_raw(record, record_len) }) else {
+        return reject(out);
+    };
     buffer_result_direct(out, || api::passport_update(rec, today, trackers, active))
 }
 
@@ -514,7 +509,10 @@ pub unsafe extern "C" fn arca_stats_record_scan(
     active: i32,
     out: *mut ArcaBuffer,
 ) -> i32 {
-    let b = (unsafe { slice_from_raw(blob, blob_len) }).unwrap_or(&[]);
+    // SAFETY: the caller passes `blob_len` readable bytes at `blob` (or null with 0), see the header.
+    let Some(b) = (unsafe { slice_from_raw(blob, blob_len) }) else {
+        return reject(out);
+    };
     buffer_result_direct(out, || api::stats_record_scan(b, verdict, trackers, active))
 }
 
@@ -526,7 +524,10 @@ pub unsafe extern "C" fn arca_stats_record_event(
     event: i32,
     out: *mut ArcaBuffer,
 ) -> i32 {
-    let b = (unsafe { slice_from_raw(blob, blob_len) }).unwrap_or(&[]);
+    // SAFETY: the caller passes `blob_len` readable bytes at `blob` (or null with 0), see the header.
+    let Some(b) = (unsafe { slice_from_raw(blob, blob_len) }) else {
+        return reject(out);
+    };
     buffer_result_direct(out, || api::stats_record_event(b, event))
 }
 
@@ -537,7 +538,10 @@ pub unsafe extern "C" fn arca_stats_summary(
     blob_len: usize,
     out: *mut ArcaBuffer,
 ) -> i32 {
-    let b = (unsafe { slice_from_raw(blob, blob_len) }).unwrap_or(&[]);
+    // SAFETY: the caller passes `blob_len` readable bytes at `blob` (or null with 0), see the header.
+    let Some(b) = (unsafe { slice_from_raw(blob, blob_len) }) else {
+        return reject(out);
+    };
     buffer_result_direct(out, || api::stats_summary(b))
 }
 
@@ -551,7 +555,10 @@ pub unsafe extern "C" fn arca_stats_passport(
     today: i32,
     out: *mut ArcaBuffer,
 ) -> i32 {
-    let b = (unsafe { slice_from_raw(blob, blob_len) }).unwrap_or(&[]);
+    // SAFETY: the caller passes `blob_len` readable bytes at `blob` (or null with 0), see the header.
+    let Some(b) = (unsafe { slice_from_raw(blob, blob_len) }) else {
+        return reject(out);
+    };
     buffer_result_direct(out, || api::stats_passport(lang, b, first_use_day, today))
 }
 
@@ -632,6 +639,10 @@ pub unsafe extern "C" fn arca_release_info(out: *mut ArcaBuffer) -> i32 {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::undocumented_unsafe_blocks,
+    reason = "each test calls the exports with exactly the arguments its name describes"
+)]
 mod tests {
     use super::*;
 
@@ -665,14 +676,65 @@ mod tests {
             assert_eq!(arca_info(null_mut()), Status::BadArgument.code());
             assert_eq!(arca_self_test(null_mut()), Status::BadArgument.code());
             assert_eq!(arca_doc_append(1, null_mut(), 10), Status::BadArgument.code());
-            assert_eq!(arca_doc_read_file(1, null_mut()), -i64::from(Status::BadArgument.code()));
-            assert_eq!(
-                arca_outcome_sanitized_write_file(1, null_mut()),
-                -i64::from(Status::BadArgument.code())
-            );
             assert_eq!(arca_doc_set_password(1, null_mut(), 10), Status::BadArgument.code());
             assert_eq!(arca_about(1, null_mut()), Status::BadArgument.code());
             assert_eq!(arca_passport(1, null_mut(), 10, 0, null_mut()), Status::BadArgument.code());
+        }
+    }
+
+    #[test]
+    fn a_null_record_with_a_length_is_a_bad_argument_not_an_empty_one() {
+        let mut out = ArcaBuffer::empty();
+        unsafe {
+            assert_eq!(
+                arca_passport(1, core::ptr::null(), 36, 0, &raw mut out),
+                Status::BadArgument.code()
+            );
+            assert!(out.data.is_null());
+            assert_eq!(
+                arca_stats_summary(core::ptr::null(), 8, &raw mut out),
+                Status::BadArgument.code()
+            );
+            assert_eq!(
+                arca_stats_record_event(core::ptr::null(), 1, 1, &raw mut out),
+                Status::BadArgument.code()
+            );
+            // An empty record is still fine.
+            assert_eq!(arca_stats_summary(core::ptr::null(), 0, &raw mut out), Status::Ok.code());
+            arca_buffer_free(core::mem::replace(&mut out, ArcaBuffer::empty()));
+        }
+    }
+
+    #[test]
+    fn a_length_no_slice_can_have_is_refused() {
+        let byte = 0u8;
+        unsafe {
+            assert_eq!(arca_doc_append(1, &raw const byte, usize::MAX), Status::BadArgument.code());
+            assert_eq!(
+                arca_doc_set_password(1, &raw const byte, usize::MAX),
+                Status::BadArgument.code()
+            );
+        }
+    }
+
+    #[test]
+    fn the_abi_version_is_the_engine_s() {
+        assert_eq!(arca_abi_version(), arca_engine::ABI_VERSION);
+    }
+}
+
+#[cfg(test)]
+mod header_tests {
+    /// The C header states the ABI version this library speaks, and the copy of the header in
+    /// the Swift package is the same file.
+    #[test]
+    fn the_header_names_the_abi_version_of_the_library() {
+        let header = include_str!("../../../include/arca.h");
+        let want = format!("#define ARCA_ABI_VERSION {}\n", arca_engine::ABI_VERSION);
+        assert!(header.contains(&want), "include/arca.h must say {want:?}");
+        assert_eq!(header, include_str!("../../../app/Sources/ArcaCore/include/arca.h"));
+        for gone in ["arca_doc_read_file", "arca_outcome_sanitized_write_file"] {
+            assert!(!header.contains(gone), "{gone} is no longer exported");
         }
     }
 }
