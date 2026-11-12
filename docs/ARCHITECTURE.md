@@ -599,8 +599,8 @@ tools/check-unsafe.sh
 # Wasm-гость и сквозные тесты в песочнице
 cargo build -p arca-guest-xray --target wasm32-unknown-unknown --profile guest
 ARCA_REQUIRE_E2E=1 \
-ARCA_GUEST_XRAY_WASM=$PWD/target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
-    cargo test --release -p arca-guest-xray --test e2e_sandbox -- --nocapture
+ARCA_GUEST_WASM=$PWD/target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
+    cargo test --release -p arca-guest-xray --test e2e_sandbox -- --include-ignored --nocapture
 # ARCA_REQUIRE_E2E=1 превращает «тест пропущен» в ошибку; ARCA_CORPUS_DIR=<каталог>
 # добавляет сверку гостя с нативным сканером по набору файлов
 # (корпус пишет `ARCA_CORPUS_OUT=<каталог> cargo test -p arca-xray dump_corpus`)

@@ -210,13 +210,18 @@ cargo test --workspace
 bash tools/build-guest.sh
 
 # Сквозное тестирование Wasm-гостя в песочнице на тестовом корпусе
-ARCA_GUEST_XRAY_WASM=$PWD/target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
+ARCA_GUEST_WASM=$PWD/target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
 ARCA_CORPUS_DIR=$PWD/tests/fixtures \
-    cargo test --release -p arca-guest-xray --test e2e_sandbox
+    cargo test --release -p arca-guest-xray --test e2e_sandbox -- --include-ignored
 
 # Запуск полигона malware-test в реальной Wasm-песочнице
 bash tools/check-malware-lab.sh
 ```
+
+Тесты с реальным гостем помечены `#[ignore]` и без `-- --include-ignored` видны как пропущенные, а не «зелёные»; путь к гостю задаёт `ARCA_GUEST_WASM` (старое имя `ARCA_GUEST_XRAY_WASM` читается ещё один релиз).
+
+> [!WARNING]
+> **Антивирус и полигон.** Файлы `tests/malware-test/` описывают настоящие эксплойты, и антивирус (в том числе Microsoft Defender) может удалить их из рабочей копии — тогда тест снимков сообщит, что файл есть в git, но пропал. Не перезаписывайте эталон (`ARCA_LAB_BLESS`): восстановите файл (`git checkout -- tests/malware-test`) и добавьте каталог репозитория в исключения антивируса, либо гоняйте проверки на чистой выгрузке коммита: `git archive HEAD | tar -x -C /tmp/arca-copy` (так по умолчанию работает и `tools/check-reproducible.sh`).
 
 ### 2. Сборка Android APK
 Для сборки пакета требуются JDK 17+, Android SDK (`platforms;android-36`, `build-tools;36.0.0`) и NDK-компоновщик. Сборка не требует Gradle:

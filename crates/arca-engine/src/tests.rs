@@ -3,7 +3,7 @@
 
 //! Tests of the engine.
 //!
-//! Everything that needs the real guest module runs only when `ARCA_GUEST_XRAY_WASM` names
+//! Everything that needs the real guest module runs only when `ARCA_GUEST_WASM` (formerly `ARCA_GUEST_XRAY_WASM`, still read for one release) names
 //! the built `arca_guest_xray.wasm` (CI does, and sets `ARCA_REQUIRE_E2E=1` so that a
 //! missing module fails the build instead of silently skipping the checks).
 
@@ -28,14 +28,16 @@ fn required() -> bool {
 }
 
 fn host() -> Option<Host> {
-    let Some(path) = std::env::var_os("ARCA_GUEST_XRAY_WASM") else {
+    let Some(path) =
+        std::env::var_os("ARCA_GUEST_WASM").or_else(|| std::env::var_os("ARCA_GUEST_XRAY_WASM"))
+    else {
         assert!(
             !required(),
-            "ARCA_REQUIRE_E2E is set but ARCA_GUEST_XRAY_WASM is not: the engine tests would verify nothing"
+            "ARCA_REQUIRE_E2E is set but ARCA_GUEST_WASM is not: the engine tests would verify nothing"
         );
         #[allow(clippy::print_stderr)] // a skipped test says so
         {
-            eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+            eprintln!("skipped: ARCA_GUEST_WASM not set");
         }
         return None;
     };
@@ -582,7 +584,12 @@ fn a_cancelled_job_stops_the_run() {
 fn oversized_input_is_refused_before_the_sandbox_is_involved() {
     let Some(host) = host() else { return };
     let small = Host::new(Engine::new(
-        std::fs::read(std::env::var_os("ARCA_GUEST_XRAY_WASM").unwrap()).unwrap(),
+        std::fs::read(
+            std::env::var_os("ARCA_GUEST_WASM")
+                .or_else(|| std::env::var_os("ARCA_GUEST_XRAY_WASM"))
+                .unwrap(),
+        )
+        .unwrap(),
         EngineConfig { max_input_bytes: 1 << 20, ..EngineConfig::default() },
     ));
     let doc = small.doc_new(u64::MAX);

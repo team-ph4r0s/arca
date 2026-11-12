@@ -30,7 +30,7 @@ themselves (mutations, bombs, truncations) or supplied locally through `ARCA_COR
 
 Sources of the generated ones are in `tools/fixtures/`. How they are used:
 
-    ARCA_CORPUS_DIR=$PWD/tests/fixtures cargo test --release -p arca-guest-xray --test e2e_sandbox
+    ARCA_CORPUS_DIR=$PWD/tests/fixtures cargo test --release -p arca-guest-xray --test e2e_sandbox -- --include-ignored
     ARCA_CORPUS_DIR=$PWD/tests/fixtures ARCA_GUEST_WASM=... android/host-test/run.sh
 
 Use an absolute path (`$PWD/...`): `cargo test` runs from the crate's directory, so a relative

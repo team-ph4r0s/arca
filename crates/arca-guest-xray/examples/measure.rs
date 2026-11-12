@@ -2,7 +2,7 @@
 //! input.
 //!
 //! ```text
-//! ARCA_GUEST_XRAY_WASM=target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
+//! ARCA_GUEST_WASM=target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
 //!     cargo run --release -p arca-guest-xray --example measure -- file1.xlsx file2.docx
 //! ```
 //!
@@ -20,8 +20,10 @@ use arca_abi::request::{Op, flags, prefix};
 use arca_sandbox::{GuestModule, RunOptions, Sandbox, SandboxPolicy};
 
 fn main() -> ExitCode {
-    let Some(path) = std::env::var_os("ARCA_GUEST_XRAY_WASM") else {
-        eprintln!("set ARCA_GUEST_XRAY_WASM to the built guest module");
+    let Some(path) =
+        std::env::var_os("ARCA_GUEST_WASM").or_else(|| std::env::var_os("ARCA_GUEST_XRAY_WASM"))
+    else {
+        eprintln!("set ARCA_GUEST_WASM to the built guest module");
         return ExitCode::from(2);
     };
     let bytes = match std::fs::read(&path) {
