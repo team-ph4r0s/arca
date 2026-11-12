@@ -38,6 +38,9 @@ mod doc;
 mod docx;
 mod export;
 mod formula;
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing;
 mod listfmt;
 pub mod model;
 mod msg;

@@ -23,7 +23,7 @@ libfuzzer-sys = "0.4"
 arca-abi = { path = "../crates/arca-abi" }
 arca-container = { path = "../crates/arca-container" }
 arca-xray = { path = "../crates/arca-xray" }
-arca-preview = { path = "../crates/arca-preview" }
+arca-preview = { path = "../crates/arca-preview", features = ["fuzzing"] }
 arca-image = { path = "../crates/arca-image" }
 arca-digest = { path = "../crates/arca-digest" }
 
@@ -143,6 +143,76 @@ bench = false
 [[bin]]
 name = "pdf"
 path = "fuzz_targets/pdf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rtf"
+path = "fuzz_targets/rtf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "doc"
+path = "fuzz_targets/doc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xls"
+path = "fuzz_targets/xls.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ppt"
+path = "fuzz_targets/ppt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "odf"
+path = "fuzz_targets/odf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "msg"
+path = "fuzz_targets/msg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vsd"
+path = "fuzz_targets/vsd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "formula"
+path = "fuzz_targets/formula.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "numfmt"
+path = "fuzz_targets/numfmt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plain"
+path = "fuzz_targets/plain.rs"
 test = false
 doc = false
 bench = false
