@@ -193,14 +193,21 @@ fn bytes_result(env: Env, f: impl FnOnce() -> Option<Vec<u8>>) -> JObject {
     array
 }
 
-/// The bytes of an optional `byte[]` argument (`null` is an empty record).
-fn optional_bytes(env: Env, array: JObject) -> Vec<u8> {
-    JniEnv::new(env)
-        .and_then(|e| {
-            let n = e.array_len(array)?;
-            e.read_array(array, 0, n.min(1 << 16))
-        })
-        .unwrap_or_default()
+/// The largest record (passport, statistics) the app may pass in.
+const MAX_RECORD_BYTES: usize = 1 << 16;
+
+/// The bytes of an optional `byte[]` argument: `null` is an empty record; a record larger than
+/// [`MAX_RECORD_BYTES`] (or one that cannot be read) is `None`, never silently cut short.
+fn optional_bytes(env: Env, array: JObject) -> Option<Vec<u8>> {
+    if array.is_null() {
+        return Some(Vec::new());
+    }
+    let e = JniEnv::new(env)?;
+    let n = e.array_len(array)?;
+    if n > MAX_RECORD_BYTES {
+        return None;
+    }
+    e.read_array(array, 0, n)
 }
 
 const BAD_ARGUMENT: JInt = 12;
@@ -497,7 +504,7 @@ pub extern "system" fn Java_org_arca_viewer_Native_passport(
     record: JObject,
     today: JInt,
 ) -> JObject {
-    bytes_result(env, || Some(api::passport(lang, &optional_bytes(env, record), today)))
+    bytes_result(env, || optional_bytes(env, record).map(|b| api::passport(lang, &b, today)))
 }
 
 #[unsafe(no_mangle)]
@@ -510,7 +517,7 @@ pub extern "system" fn Java_org_arca_viewer_Native_passportUpdate(
     active: JInt,
 ) -> JObject {
     bytes_result(env, || {
-        Some(api::passport_update(&optional_bytes(env, record), today, trackers, active))
+        optional_bytes(env, record).map(|b| api::passport_update(&b, today, trackers, active))
     })
 }
 
@@ -524,7 +531,7 @@ pub extern "system" fn Java_org_arca_viewer_Native_statsRecordScan(
     active: JInt,
 ) -> JObject {
     bytes_result(env, || {
-        Some(api::stats_record_scan(&optional_bytes(env, blob), verdict, trackers, active))
+        optional_bytes(env, blob).map(|b| api::stats_record_scan(&b, verdict, trackers, active))
     })
 }
 
@@ -535,7 +542,7 @@ pub extern "system" fn Java_org_arca_viewer_Native_statsRecordEvent(
     blob: JObject,
     event: JInt,
 ) -> JObject {
-    bytes_result(env, || Some(api::stats_record_event(&optional_bytes(env, blob), event)))
+    bytes_result(env, || optional_bytes(env, blob).map(|b| api::stats_record_event(&b, event)))
 }
 
 #[unsafe(no_mangle)]
@@ -544,7 +551,7 @@ pub extern "system" fn Java_org_arca_viewer_Native_statsSummary(
     _class: JObject,
     blob: JObject,
 ) -> JObject {
-    bytes_result(env, || Some(api::stats_summary(&optional_bytes(env, blob))))
+    bytes_result(env, || optional_bytes(env, blob).map(|b| api::stats_summary(&b)))
 }
 
 #[unsafe(no_mangle)]
@@ -557,7 +564,7 @@ pub extern "system" fn Java_org_arca_viewer_Native_statsPassport(
     today: JInt,
 ) -> JObject {
     bytes_result(env, || {
-        Some(api::stats_passport(lang, &optional_bytes(env, blob), first_use_day, today))
+        optional_bytes(env, blob).map(|b| api::stats_passport(lang, &b, first_use_day, today))
     })
 }
 

@@ -155,6 +155,8 @@ public final class Isolation {
             }
         };
         Intent intent = new Intent(c, SandboxService.class);
+        // The service answers only the uid named here (and only if it is the package's own).
+        intent.putExtra(SandboxService.EXTRA_PARENT_UID, android.os.Process.myUid());
         // A new instance name gives a new process on Android 10+; before that, unbinding the
         // previous document has already ended the old one.
         String instance = "doc" + INSTANCE.incrementAndGet();
