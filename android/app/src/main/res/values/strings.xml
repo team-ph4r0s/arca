@@ -298,6 +298,8 @@
     <string name="about_homepage">Project page</string>
     <string name="about_source">Source code</string>
     <string name="about_fingerprint">Attribution fingerprint</string>
+    <string name="about_signing_cert">Signing certificate (SHA-256)</string>
+    <string name="about_signing_cert_hint">Official Arca builds are signed with the certificate whose SHA-256 is published in the project README at github.com/team-ph4r0s/arca. If the values differ, this is not an official build.</string>
 
     <!-- Licences -->
     <string name="licenses_agpl">AGPLv3</string>

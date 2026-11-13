@@ -23,7 +23,7 @@
 
 | константа | что вписать |
 |---|---|
-| `UPSTREAM_HOMEPAGE` | страница проекта (например, `https://github.com/Johnny-Wickky/arca`) |
+| `UPSTREAM_HOMEPAGE` | страница проекта (например, `https://github.com/team-ph4r0s/arca`) |
 | `UPSTREAM_SOURCE` | где опубликован исходный код (обязательство AGPLv3 §13), обычно тот же репозиторий |
 | `UPSTREAM_AUTHORS[0]` | имя создателей и ссылка на них |
 | `UPSTREAM_DONATION_LINKS` | необязательно: пусто, пока ссылок нет; добавьте, когда появятся |
