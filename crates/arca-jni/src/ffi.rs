@@ -22,6 +22,7 @@
 //! descriptor and close it. The Java side must pass `ParcelFileDescriptor.detachFd()`.
 
 #![allow(unsafe_code, reason = "this file is the JNI boundary")]
+#![warn(clippy::undocumented_unsafe_blocks, clippy::missing_safety_doc)]
 #![allow(non_snake_case, reason = "JNI export names are fixed by the JNI specification")]
 #![allow(
     clippy::missing_safety_doc,

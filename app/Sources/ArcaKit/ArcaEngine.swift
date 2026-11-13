@@ -107,6 +107,11 @@ public actor ArcaEngine {
     ///
     /// Idempotent: safe to call multiple times.
     public func initialize(limits: EngineLimits = .default) throws {
+        // A library built for another ABI would read the flags and status codes of this header
+        // differently: refuse to start rather than misreport a verdict.
+        guard arca_abi_version() == Int32(ARCA_ABI_VERSION) else {
+            throw ArcaError.fault
+        }
         if isInitialized || arca_is_init() != 0 {
             isInitialized = true
             return
@@ -168,9 +173,21 @@ public actor ArcaEngine {
             }
         }
 
-        let readCount = fileURL.path.withCString { cPath in
-            arca_doc_read_file(docHandle, cPath)
+        // Opened here, without following a symbolic link at the last step, and checked on the open
+        // descriptor (not on the path, which could be swapped in between): a regular file only.
+        let fd = fileURL.path.withCString { cPath in
+            open(cPath, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         }
+        guard fd >= 0 else {
+            throw ArcaError.io
+        }
+        var info = stat()
+        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
+            close(fd)
+            throw ArcaError.io
+        }
+        // The engine takes the descriptor over and closes it.
+        let readCount = arca_doc_read_fd(docHandle, fd)
 
         guard readCount >= 0 else {
             throw ArcaError(handleOrCode: readCount)
@@ -394,9 +411,19 @@ public actor ArcaEngine {
 
     private func applyPassword(_ password: String?, to document: DocumentSession) throws {
         guard let pw = password, !pw.isEmpty else { return }
-        let pwData = Data(pw.utf8)
-        let status = pwData.withUnsafeBytes { ptr -> Int32 in
-            guard let base = ptr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return 0 }
+        // The bytes live in one array that is wiped as soon as the engine has its own copy
+        // (memset_s cannot be optimised away). Swift strings cannot be wiped: the caller keeps
+        // the password as a String no longer than it must (see AppState.submitPassword).
+        var bytes = Array(pw.utf8)
+        defer {
+            bytes.withUnsafeMutableBytes { raw in
+                if let base = raw.baseAddress {
+                    _ = memset_s(base, raw.count, 0, raw.count)
+                }
+            }
+        }
+        let status = bytes.withUnsafeBufferPointer { ptr -> Int32 in
+            guard let base = ptr.baseAddress else { return 0 }
             return arca_doc_set_password(document.handle, base, ptr.count)
         }
         guard status == ArcaStatusCode.ok else {
