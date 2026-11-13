@@ -905,8 +905,12 @@ impl Host {
             Some(Output::Preview(p)) => Body::Preview(Box::new(PreviewIndex::new(*p))),
             Some(Output::Sanitized(s)) => {
                 let mut s: SanitizedDocument = *s;
-                // The guest vouches for its own work; the host checks what it can cheaply.
-                match check_sterile(&s) {
+                // The guest vouches for its own work; the host checks what it can cheaply, then
+                // has the copy X-rayed again in a fresh sandbox before anyone can read it.
+                match check_sterile(&s)
+                    .map_err(str::to_owned)
+                    .and_then(|()| self.rescan_sterile(&s, &token))
+                {
                     Ok(()) => {
                         let info = render::sanitized_json(&s);
                         // Move the sterile copy into a buffer that is wiped when it is released.
@@ -915,7 +919,7 @@ impl Host {
                     }
                     Err(why) => {
                         status = Status::Fault;
-                        message = why.to_owned();
+                        message = why;
                         Body::None
                     }
                 }
@@ -935,6 +939,41 @@ impl Host {
             stats: out.stats,
             body,
         }))
+    }
+
+    /// The second, independent check of a sterile copy: the copy's bytes are X-rayed in a new
+    /// sandbox, with the budget of an ordinary scan of a document that size. The copy is handed
+    /// out only if that scan sees the format the guest declared, finds nothing active or remote,
+    /// and gives the verdict `Clean` (or `Unverified` for a part it cannot read, which the guest's
+    /// own verification also allows; that is the documented exception, never a finding).
+    pub(crate) fn rescan_sterile(
+        &self,
+        s: &SanitizedDocument,
+        token: &CancelToken,
+    ) -> Result<(), String> {
+        use arca_xray::{Category, Verdict};
+        let out = self.engine.run(Op::Scan, 0, &[], &s.bytes, token);
+        let Some(Output::Report(r)) = out.data else {
+            return Err(format!(
+                "the sterile copy could not be checked again: {:?} {}",
+                out.status, out.message
+            ));
+        };
+        if r.format != s.format {
+            return Err(format!(
+                "the sterile copy is {:?}, not the {:?} it was declared to be",
+                r.format, s.format
+            ));
+        }
+        if let Some(f) = r.findings.iter().find(|f| {
+            matches!(f.kind.category(), Category::ActiveContent | Category::RemoteContent)
+        }) {
+            return Err(format!("the sterile copy still has {:?} ({})", f.kind, f.location));
+        }
+        match r.verdict {
+            Verdict::Clean | Verdict::Unverified => Ok(()),
+            other => Err(format!("checked again, the sterile copy is {other:?}")),
+        }
     }
 
     fn outcome(&self, outcome: Handle) -> Result<Arc<Outcome>, Status> {
@@ -1133,8 +1172,98 @@ impl Host {
 }
 
 /// Part names a sterile copy must not contain: what sterilisation exists to remove.
-const FORBIDDEN_PARTS: [&str; 5] =
-    ["vbaproject.bin", "activex", "oleobject", "embeddings/", "macrosheets/"];
+/// Names (lower case, matched anywhere in a part name) that a sterile ZIP-based copy must not
+/// contain. OOXML: macro projects, ActiveX, OLE objects and embeddings, Excel 4 macro sheets and
+/// dialog sheets, the ribbon (customUI, with callbacks into code), links to other workbooks, data
+/// connections and web add-ins. ODF: Basic libraries, scripts, dialogs and the user-interface
+/// configuration (which binds toolbar buttons to macros).
+const FORBIDDEN_PARTS: [&str; 14] = [
+    "vbaproject.bin",
+    "activex",
+    "oleobject",
+    "embeddings/",
+    "macrosheets/",
+    "dialogsheets/",
+    "customui/",
+    "externallinks/",
+    "connections.xml",
+    "webextensions/",
+    "basic/",
+    "scripts/",
+    "dialogs/",
+    "configurations2/",
+];
+
+/// PDF names that start or carry active content; a sterile PDF must have none of them (after
+/// `#xx` escapes in names are decoded, so `/J#61vaScript` is `/JavaScript`).
+const FORBIDDEN_PDF_NAMES: [&[u8]; 9] = [
+    b"JavaScript",
+    b"JS",
+    b"Launch",
+    b"OpenAction",
+    b"AA",
+    b"EmbeddedFile",
+    b"EmbeddedFiles",
+    b"RichMedia",
+    b"XFA",
+];
+
+/// Whether byte `b` ends a PDF name (white space or a delimiter).
+const fn ends_pdf_name(b: u8) -> bool {
+    matches!(
+        b,
+        b'\0'
+            | b'\t'
+            | b'\n'
+            | b'\x0c'
+            | b'\r'
+            | b' '
+            | b'('
+            | b')'
+            | b'<'
+            | b'>'
+            | b'['
+            | b']'
+            | b'{'
+            | b'}'
+            | b'/'
+            | b'%'
+    )
+}
+
+/// The first forbidden name in the PDF `data`, or `None`. Every `/Name` token is read with its
+/// `#xx` escapes decoded and compared whole (so `/JSON` is not `/JS`).
+fn forbidden_pdf_name(data: &[u8]) -> Option<&'static [u8]> {
+    let mut i = 0;
+    while let Some(off) = data.get(i..)?.iter().position(|&b| b == b'/') {
+        let mut j = i + off + 1;
+        let mut name = Vec::new();
+        while let Some(&b) = data.get(j) {
+            if ends_pdf_name(b) {
+                break;
+            }
+            if b == b'#'
+                && let Some(hex) = data.get(j + 1..j + 3)
+                && let Ok(s) = core::str::from_utf8(hex)
+                && let Ok(v) = u8::from_str_radix(s, 16)
+            {
+                name.push(v);
+                j += 3;
+                continue;
+            }
+            name.push(b);
+            j += 1;
+            if name.len() > 64 {
+                break;
+            }
+        }
+        if let Some(hit) = FORBIDDEN_PDF_NAMES.iter().find(|n| **n == name.as_slice()) {
+            return Some(hit);
+        }
+        i = j.max(i + off + 1);
+    }
+    None
+}
 
 /// Cheap, independent checks of a sterile copy the (sandboxed, but possibly compromised) guest
 /// reports as verified.
@@ -1163,6 +1292,9 @@ pub(crate) fn check_sterile(s: &SanitizedDocument) -> Result<(), &'static str> {
         if tainted {
             return Err("the sterile copy still contains a part that sterilisation removes");
         }
+    }
+    if s.bytes.starts_with(b"%PDF-") && forbidden_pdf_name(&s.bytes).is_some() {
+        return Err("the sterile PDF still names an action, a script or an embedded file");
     }
     Ok(())
 }
