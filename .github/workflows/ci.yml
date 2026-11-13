@@ -112,8 +112,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          for image in ubuntu:22.04 debian:bookworm; do
-            label="${image//[:\/]/-}"
+          # Images pinned by digest (multi-arch index); update both together, deliberately.
+          for image in ubuntu:22.04@sha256:74b12b11ffa550fba1929ad4d8d16533c34f6612728469671afba1b03b66881c debian:bookworm@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8; do
+            label="${image%%@*}"
+            label="${label//[:\/]/-}"
             # Use the runner's DNS instead of Docker's bridge DNS for package and toolchain downloads.
             docker run --rm --network host -v "$PWD:/src:ro" -v "$PWD/out:/out" "$image" \
               bash /src/tools/repro-guest-container.sh "$label" /out

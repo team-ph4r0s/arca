@@ -5,7 +5,10 @@
 #                                no secret is available to these runs)
 #   tag v*                       checks + package signed with the release key (job package-release,
 #                                environment "release", the only job that sees the signing secrets)
-#                                + GitHub release (pre-release)
+#                                + GitHub release marked as the latest one. Nothing is signed or
+#                                published until the ci workflow has passed on the same commit
+#                                (job ci-passed). Old releases are pruned by prune-releases.yml,
+#                                started by hand, never by a tag.
 #   workflow_dispatch            same as a push, optionally with the emulator run
 #
 # Third-party actions are pinned to full commit SHAs. The package is built by tools/android/
@@ -53,7 +56,7 @@ env:
   ANDROID_BUILD_TOOLS: "36.0.0"
   # Linker only: the NDK's clang links the shared libraries. No C or C++ is compiled
   # (cargo-deny bans cc/cmake/bindgen; tools/check-unsafe.sh checks the lock file).
-  NDK_FALLBACK: "27.3.13750724"
+  NDK_VERSION: "27.3.13750724"
 
 jobs:
   checks:
@@ -109,11 +112,8 @@ jobs:
           sdkm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkm" --licenses >/dev/null || true
           "$sdkm" --install "platforms;android-$ANDROID_API_TARGET" "build-tools;$ANDROID_BUILD_TOOLS"
-          ndk="${ANDROID_NDK_LATEST_HOME:-}"
-          if [ -z "$ndk" ] || [ ! -d "$ndk" ]; then
-            "$sdkm" --install "ndk;$NDK_FALLBACK"
-            ndk="$ANDROID_HOME/ndk/$NDK_FALLBACK"
-          fi
+          "$sdkm" --install "ndk;$NDK_VERSION"
+          ndk="$ANDROID_HOME/ndk/$NDK_VERSION"
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
           grep -E "Pkg.(Revision|Desc)" "$ndk/source.properties"
       - name: build the wasm guest
@@ -160,25 +160,63 @@ jobs:
           sdkm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkm" --licenses >/dev/null || true
           "$sdkm" --install "platforms;android-$ANDROID_API_TARGET" "build-tools;$ANDROID_BUILD_TOOLS"
-          ndk="${ANDROID_NDK_LATEST_HOME:-}"
-          if [ -z "$ndk" ] || [ ! -d "$ndk" ]; then
-            "$sdkm" --install "ndk;$NDK_FALLBACK"
-            ndk="$ANDROID_HOME/ndk/$NDK_FALLBACK"
-          fi
+          "$sdkm" --install "ndk;$NDK_VERSION"
+          ndk="$ANDROID_HOME/ndk/$NDK_VERSION"
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
       - name: build twice and compare
         env:
           ARCA_BUILD_TOOLS: ${{ env.ANDROID_BUILD_TOOLS }}
         run: bash tools/android/check-reproducible-apk.sh
 
-  # Version tags only. The signing secrets belong to the `release` environment (configure its
+  # Version tags only: the release key is not touched until the ci workflow (fmt, clippy, tests,
+  # the malware lab, the guest end to end, reproducibility, cargo-deny) has passed on this very
+  # commit. It waits for ci runs of the commit that are still going, then requires every ci run
+  # of the commit to have succeeded (at least one). A tag on a commit ci never ran on is refused.
+  ci-passed:
+    name: ci passed on this commit
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    timeout-minutes: 120
+    steps:
+      - name: wait for the ci workflow of ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=50"
+          for attempt in $(seq 1 220); do
+            total="$(gh api "$url" --jq '.workflow_runs | length')"
+            pending="$(gh api "$url" --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+            if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then
+              gh api "$url" --jq '.workflow_runs[] | "\(.id) \(.event) \(.conclusion) \(.html_url)"'
+              ok="$(gh api "$url" --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')"
+              if [ "$ok" -eq "$total" ]; then
+                echo "ci passed on $GITHUB_SHA ($ok run(s))"
+                exit 0
+              fi
+              echo "::error::ci did not pass on $GITHUB_SHA: no release without a green ci"
+              exit 1
+            fi
+            if [ "$total" -eq 0 ] && [ "$attempt" -gt 20 ]; then
+              echo "::error::ci never ran on $GITHUB_SHA: no release without a green ci"
+              exit 1
+            fi
+            echo "waiting for ci on $GITHUB_SHA ($pending of $total run(s) still going)"
+            sleep 30
+          done
+          echo "::error::ci on $GITHUB_SHA did not finish in time"
+          exit 1
+
+  # The signing secrets belong to the `release` environment (configure its
   # protection rules, e.g. required reviewers and a tag-only deployment rule, in the repository
   # settings) and are passed to the steps that need them through those steps' own `env:`; they
   # are never written to GITHUB_ENV, so no other step can see them.
   package-release:
     name: package, release key (arm64-v8a · armeabi-v7a · x86_64)
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-    needs: checks
+    needs: [checks, ci-passed]
     runs-on: ubuntu-24.04
     environment: release
     outputs:
@@ -194,11 +232,8 @@ jobs:
           sdkm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkm" --licenses >/dev/null || true
           "$sdkm" --install "platforms;android-$ANDROID_API_TARGET" "build-tools;$ANDROID_BUILD_TOOLS"
-          ndk="${ANDROID_NDK_LATEST_HOME:-}"
-          if [ -z "$ndk" ] || [ ! -d "$ndk" ]; then
-            "$sdkm" --install "ndk;$NDK_FALLBACK"
-            ndk="$ANDROID_HOME/ndk/$NDK_FALLBACK"
-          fi
+          "$sdkm" --install "ndk;$NDK_VERSION"
+          ndk="$ANDROID_HOME/ndk/$NDK_VERSION"
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
           grep -E "Pkg.(Revision|Desc)" "$ndk/source.properties"
       - name: build the wasm guest
@@ -294,30 +329,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name arca-apk --dir dist
-      - name: remove releases and tags older than v0.3.0 (signed with an early, retired key)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          floor="0.3.0"
-          # Every release whose version is below the floor goes, together with its tag.
-          gh release list --repo "$GITHUB_REPOSITORY" --limit 500 --json tagName --jq '.[].tagName' | while read -r t; do
-            v="${t#v}"
-            [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
-            if [ "$(printf '%s\n%s\n' "$v" "$floor" | sort -V | head -n1)" = "$v" ] && [ "$v" != "$floor" ]; then
-              echo "deleting release $t"
-              gh release delete "$t" --repo "$GITHUB_REPOSITORY" --cleanup-tag -y
-            fi
-          done
-          # Tags that never had a release object.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' | sed 's#^refs/tags/##' | while read -r t; do
-            v="${t#v}"
-            [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
-            if [ "$(printf '%s\n%s\n' "$v" "$floor" | sort -V | head -n1)" = "$v" ] && [ "$v" != "$floor" ]; then
-              echo "deleting tag $t"
-              gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$t"
-            fi
-          done
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
