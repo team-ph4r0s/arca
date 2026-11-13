@@ -12,8 +12,8 @@
 //! ```
 //!
 //! The header is parsed by the *guest*, which treats the host as trusted but
-//! still validates every field: an unknown operation, a non-zero reserved
-//! word or an unknown flag is [`status::BAD_REQUEST`](crate::status::BAD_REQUEST),
+//! still validates every field: an unknown operation, a password longer than
+//! [`MAX_PASSWORD`] or an unknown flag is [`status::BAD_REQUEST`](crate::status::BAD_REQUEST),
 //! never a guess.
 
 use core::fmt;
