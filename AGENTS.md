@@ -123,6 +123,7 @@ The working copy is LF, so `tools/check-unsafe.sh` passes on it. The script also
 - Release secrets (`ARCA_KEYSTORE_B64`, `ARCA_KEYSTORE_PASS`, `ARCA_KEY_ALIAS`, optional `ARCA_KEY_PASS`) live in the
   GitHub `release` environment. No local keystore password is needed.
 - Pushing `main` and then, as a separate command, the annotated tag `vX.Y.Z` starts `.github/workflows/android.yml`; its
-  `package-release` job signs with the permanent key and publishes the GitHub release. It does not wait for
-  `.github/workflows/ci.yml`: check that `ci` is green on the commit before tagging.
+  `package-release` job signs with the permanent key and publishes the GitHub release. It runs only after the
+  `ci-passed` job has seen every `.github/workflows/ci.yml` run on the same commit finish green, so push `main`
+  first and tag the commit `ci` was started for.
 - Release notes live in `docs/releases/vX.Y.Z.md`.

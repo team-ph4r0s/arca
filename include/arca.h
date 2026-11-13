@@ -45,7 +45,7 @@ extern "C" {
  * `-status` represents an error (e.g., `-ARCA_STATUS_BAD_HANDLE` for handle errors).
  */
 /** @brief The guest ABI version this header describes (see `arca_abi_version`). */
-#define ARCA_ABI_VERSION 8
+#define ARCA_ABI_VERSION 9
 
 typedef enum ArcaStatus {
     /** @brief Operation completed successfully. */

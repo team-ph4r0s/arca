@@ -584,6 +584,7 @@ fn guest_picture_copy_equals_native_picture_copy() {
 /// request carries the reader's consent, and with the consent the copy is an ordinary, unencrypted
 /// file of the content's format.
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_makes_an_unencrypted_copy_of_a_decrypted_document_only_with_consent() {
     use arca_abi::request::prefix;
     use arca_abi::status;
