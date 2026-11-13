@@ -16,6 +16,10 @@ arca-container.workspace = true
 arca-image.workspace = true
 arca-xray.workspace = true
 
+[features]
+# Entry points for the fuzz targets in fuzz/ (see src/fuzzing.rs); never enabled for the app.
+fuzzing = []
+
 [dev-dependencies]
 quick-xml.workspace = true
 miniz_oxide.workspace = true

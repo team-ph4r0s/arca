@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [scan, sanitize, wire, zip, cfb, xml, preview, decrypt, image, png, jpeg, gif, bmp, exif, jet, pdf]
+        target: [scan, sanitize, wire, zip, cfb, xml, preview, decrypt, image, png, jpeg, gif, bmp, exif, jet, pdf, rtf, doc, xls, ppt, odf, msg, vsd, formula, numfmt, plain]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,6 +61,15 @@ jobs:
             image|png|jpeg|gif|bmp|exif) cp crates/arca-image/tests/fixtures/*.jpg crates/arca-image/tests/fixtures/*.png "$dir/" ;;
             jet) cp tests/fixtures/access-2000.mdb tests/fixtures/access-2016.accdb "$dir/" ;;
             pdf) cp tests/fixtures/*.pdf "$dir/" ;;
+            rtf) cp tests/fixtures/*.rtf "$dir/" ;;
+            doc) cp tests/fixtures/*.doc "$dir/" ;;
+            xls) cp tests/fixtures/*.xls "$dir/" ;;
+            ppt) cp tests/fixtures/*.ppt "$dir/" ;;
+            odf) cp tests/fixtures/*.od? "$dir/" ;;
+            msg|vsd) cp tests/fixtures/*.doc tests/fixtures/*.ppt "$dir/" ;;
+            formula) printf '%s' 'SUM(A1:B3)*2' > "$dir/sum"; printf '%s' 'IF(Data!A1>0,VLOOKUP(B1,A1:B3,2,FALSE),"x")' > "$dir/if" ;;
+            numfmt) printf '\0\0\0\0\0\0\x59\x40#,##0.00;[Red]-0.00' > "$dir/money"; printf '\0\0\0\0\0\x10\xe5\x40yyyy-mm-dd hh:mm' > "$dir/date" ;;
+            plain) cp tests/fixtures/*.txt tests/fixtures/*.csv tests/fixtures/*.md "$dir/" ;;
             *) cp tests/fixtures/* "$dir/" ;;
           esac
       - name: fuzz
@@ -73,9 +82,33 @@ jobs:
             scan|sanitize|zip|cfb|xml) dict=dictionaries/ooxml.dict ;;
             image|png|jpeg|gif|bmp|exif) dict=dictionaries/images.dict ;;
             pdf) dict=dictionaries/pdf.dict ;;
+            rtf) dict=dictionaries/rtf.dict ;;
+            doc|xls|ppt|msg|vsd) dict=dictionaries/cfb.dict ;;
+            odf) dict=dictionaries/odf.dict ;;
+            formula) dict=dictionaries/formula.dict ;;
+            numfmt) dict=dictionaries/numfmt.dict ;;
+            plain) dict=dictionaries/text.dict ;;
           esac
           cargo +"$FUZZ_NIGHTLY" fuzz run "${{ matrix.target }}" -- \
             -dict="$dict" -max_total_time="$SECONDS_PER_TARGET" -rss_limit_mb=2048 -timeout=30
+      - name: coverage of the corpus (scheduled and manual runs)
+        if: ${{ github.event_name != 'pull_request' }}
+        working-directory: fuzz
+        run: |
+          set -euo pipefail
+          rustup component add --toolchain "${FUZZ_NIGHTLY:-nightly}" llvm-tools-preview
+          cargo +"${FUZZ_NIGHTLY:-nightly}" fuzz coverage "${{ matrix.target }}"
+          llvm_cov="$(find "$(rustc +"${FUZZ_NIGHTLY:-nightly}" --print sysroot)" -name llvm-cov -type f | head -n1)"
+          bin="$(find target -path "*/coverage/*/release/${{ matrix.target }}" -type f | head -n1)"
+          "$llvm_cov" report "$bin" -instr-profile="coverage/${{ matrix.target }}/coverage.profdata" \
+            -ignore-filename-regex='/(\.cargo|rustc)/' > "coverage/${{ matrix.target }}/report.txt"
+          tail -n 3 "coverage/${{ matrix.target }}/report.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ github.event_name != 'pull_request' }}
+        with:
+          name: fuzz-coverage-${{ matrix.target }}
+          path: fuzz/coverage/${{ matrix.target }}/report.txt
+          if-no-files-found: warn
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
