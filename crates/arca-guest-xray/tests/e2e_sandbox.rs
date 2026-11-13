@@ -4,8 +4,8 @@
 //!
 //! ```text
 //! cargo build -p arca-guest-xray --target wasm32-unknown-unknown --profile guest
-//! ARCA_GUEST_XRAY_WASM=target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
-//!     cargo test -p arca-guest-xray --test e2e_sandbox
+//! ARCA_GUEST_WASM=target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm \
+//!     cargo test -p arca-guest-xray --test e2e_sandbox -- --include-ignored
 //! ```
 //!
 //! Without the variable the tests report themselves as skipped **unless**
@@ -47,10 +47,12 @@ fn e2e_required() -> bool {
 }
 
 fn guest() -> Option<GuestModule> {
-    let Some(path) = std::env::var_os("ARCA_GUEST_XRAY_WASM") else {
+    let Some(path) =
+        std::env::var_os("ARCA_GUEST_WASM").or_else(|| std::env::var_os("ARCA_GUEST_XRAY_WASM"))
+    else {
         assert!(
             !e2e_required(),
-            "ARCA_REQUIRE_E2E is set but ARCA_GUEST_XRAY_WASM is not: the end-to-end tests would verify nothing"
+            "ARCA_REQUIRE_E2E is set but ARCA_GUEST_WASM is not: the end-to-end tests would verify nothing"
         );
         return None;
     };
@@ -144,11 +146,12 @@ fn xlsx(rows: usize) -> Vec<u8> {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn ordinary_spreadsheets_fit_the_default_budget() {
     // Regression for finding B-1: a 100 KB workbook used to need ~6 400 fuel
     // per input byte against a 4 000 budget and was refused as "too complex".
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let policy = SandboxPolicy::default();
@@ -178,9 +181,10 @@ fn ordinary_spreadsheets_fit_the_default_budget() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_report_equals_native_report() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -197,9 +201,10 @@ fn guest_report_equals_native_report() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_rejects_bombs_inside_the_sandbox() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -214,9 +219,10 @@ fn guest_rejects_bombs_inside_the_sandbox() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn starved_guest_is_stopped() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let policy = SandboxPolicy {
@@ -241,9 +247,10 @@ fn starved_guest_is_stopped() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn slicing_does_not_change_the_guest_result() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let doc = docx(&[(
@@ -261,9 +268,10 @@ fn slicing_does_not_change_the_guest_result() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn the_real_guest_can_be_cancelled_and_timed_out() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -301,6 +309,7 @@ fn the_real_guest_can_be_cancelled_and_timed_out() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn real_world_corpus_if_provided() {
     // Optional: ARCA_CORPUS_DIR=/path/to/documents runs every file through the
     // guest and checks that it matches the native scan.
@@ -309,7 +318,7 @@ fn real_world_corpus_if_provided() {
             !e2e_required(),
             "ARCA_REQUIRE_E2E is set but ARCA_CORPUS_DIR is not: the corpus comparison would verify nothing"
         );
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM / ARCA_CORPUS_DIR not set");
+        eprintln!("skipped: ARCA_GUEST_WASM / ARCA_CORPUS_DIR not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -356,9 +365,10 @@ fn real_world_corpus_if_provided() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_preview_equals_native_preview() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -377,9 +387,10 @@ fn guest_preview_equals_native_preview() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_sanitize_equals_native_sanitize() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -406,9 +417,10 @@ fn guest_sanitize_equals_native_sanitize() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_page_equals_native_page() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -445,9 +457,10 @@ fn guest_page_equals_native_page() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn bad_requests_are_statuses_not_traps() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -461,9 +474,10 @@ fn bad_requests_are_statuses_not_traps() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn preview_of_a_large_spreadsheet_stays_inside_the_budget() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -477,9 +491,10 @@ fn preview_of_a_large_spreadsheet_stays_inside_the_budget() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_pictures_equal_native_pictures() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
@@ -530,9 +545,10 @@ fn guest_pictures_equal_native_pictures() {
 }
 
 #[test]
+#[ignore = "needs the built guest: set ARCA_GUEST_WASM and run with --include-ignored (CI does)"]
 fn guest_picture_copy_equals_native_picture_copy() {
     let Some(m) = guest() else {
-        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        eprintln!("skipped: ARCA_GUEST_WASM not set");
         return;
     };
     // What the engine gives a picture (see `Engine::policy_for`).

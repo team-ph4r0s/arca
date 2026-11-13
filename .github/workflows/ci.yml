@@ -69,12 +69,11 @@ jobs:
           ARCA_CORPUS_DIR: ${{ github.workspace }}/tests/fixtures
         run: |
           export ARCA_GUEST_WASM="$PWD/target/wasm32-unknown-unknown/guest/arca_guest_xray.wasm"
-          export ARCA_GUEST_XRAY_WASM="$ARCA_GUEST_WASM"
-          cargo test --release -p arca-guest-xray --test e2e_sandbox $LOCKED -- --nocapture
+          cargo test --release -p arca-guest-xray --test e2e_sandbox $LOCKED -- --include-ignored --nocapture
           # The malware lab: the same fifty attack samples through the real guest in the sandbox.
           # The native tests write them out; the sandbox test needs every one to give the pinned report.
           ARCA_LAB_OUT="$PWD/target/lab" cargo test -p arca-xray malware_lab $LOCKED
-          ARCA_LAB_DIR="$PWD/target/lab" cargo test --release -p arca-guest-xray --test malware_lab_sandbox $LOCKED -- --nocapture
+          ARCA_LAB_DIR="$PWD/target/lab" cargo test --release -p arca-guest-xray --test malware_lab_sandbox $LOCKED -- --include-ignored --nocapture
           # The engine and the JNI layer, with the real guest embedded.
           cargo test --release -p arca-engine -p arca-jni $LOCKED
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
