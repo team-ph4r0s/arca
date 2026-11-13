@@ -40,6 +40,8 @@ public final class Native {
     public static final int NOT_READY = 13;
     /** The document is encrypted and the password given does not open it. */
     public static final int WRONG_PASSWORD = 14;
+    /** The sterile copy of a document opened with a password would not be encrypted: ask first. */
+    public static final int DECRYPTED_COPY_REFUSED = 15;
 
     // ---- operations and flags (arca_abi::request) -------------------------------------------
     public static final int OP_SCAN = 1;
@@ -56,6 +58,8 @@ public final class Native {
     public static final int SANITIZE_ALL = 15;
     /** A picture keeps up to 16 megapixels instead of 4 (slower). */
     public static final int SANITIZE_FULL_SIZE = 16;
+    /** The reader agreed that the sterile copy of a document opened with a password is not encrypted. */
+    public static final int SANITIZE_ALLOW_DECRYPTED_COPY = 32;
     public static final int PREVIEW_REVEAL_HIDDEN = 1;
 
     // ---- licence texts ----------------------------------------------------------------------

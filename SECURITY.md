@@ -3,8 +3,8 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities **privately** through GitHub's
-"Report a vulnerability" button (Security tab → Advisories) of the original
-repository. Do not open public issues for security problems.
+"Report a vulnerability" button (Security tab → Advisories) of
+<https://github.com/team-ph4r0s/arca> (Security tab → Advisories). Do not open public issues for security problems.
 
 Useful reports include: the affected crate and commit, a minimal input file
 (or a generator for it), what you observed (crash, hang, wrong verdict,
@@ -31,7 +31,7 @@ a defanged sample is enough to start.
 ## Сообщение об уязвимости
 
 Сообщайте об уязвимостях **приватно** — кнопкой «Report a vulnerability»
-(вкладка Security → Advisories) в оригинальном репозитории. Не открывайте
+(вкладка Security → Advisories) в репозитории <https://github.com/team-ph4r0s/arca>. Не открывайте
 публичные issues по вопросам безопасности.
 
 Особенно ценны: любой способ заставить документ обратиться к сети, файловой
@@ -46,10 +46,42 @@ a defanged sample is enough to start.
 
 ## Supported versions
 
-Until 1.0, only the latest commit on `main` receives security fixes. Version 0.2.0 was retracted
-and superseded by 0.2.2 (see `docs/releases/v0.2.0.md`); use 0.2.2 or newer.
+| version | security fixes |
+|---|---|
+| latest release (0.8.x) and `main` | yes |
+| older 0.x releases | no — update to the latest release |
 
-До 1.0 исправления получает только последний коммит `main`. Версия 0.2.0 была отозвана и
-заменена релизом 0.2.2 (см. `docs/releases/v0.2.0.md`); используйте 0.2.2 и новее.
+Until 1.0 a fix is released as a new version; older releases are not patched. Releases are signed
+with one permanent key since 0.3.0; its certificate SHA-256 is published in the README.
 
+## Contact and response time
+
+- Private report: the "Report a vulnerability" button of
+  <https://github.com/team-ph4r0s/arca/security/advisories> (the only repository of the project;
+  reports to forks or to the old location are not read).
+- We acknowledge a report within **5 working days**, give a first assessment within
+  **14 days**, and aim to release a fix for High and Critical issues within **30 days**
+  and for the rest with the next release. The reporter is credited in the advisory unless
+  they ask not to be.
+- Advisories are published after the fixed release is out.
+
+## Поддерживаемые версии
+
+| версия | исправления безопасности |
+|---|---|
+| последний релиз (0.8.x) и `main` | да |
+| более старые релизы 0.x | нет — обновитесь до последнего |
+
+До 1.0 исправление выходит новой версией; старые релизы не исправляются. С 0.3.0 релизы
+подписаны одним постоянным ключом; SHA-256 его сертификата опубликован в README.
+
+## Контакт и сроки ответа
+
+- Приватное сообщение: кнопка «Report a vulnerability» на
+  <https://github.com/team-ph4r0s/arca/security/advisories> (единственный репозиторий проекта;
+  сообщения в форки и в старое расположение не читаются).
+- Подтверждаем получение в течение **5 рабочих дней**, даём первую оценку в течение **14 дней**,
+  исправление уязвимостей High и Critical стараемся выпустить в течение **30 дней**, остальных —
+  в ближайшем релизе. Автор сообщения указывается в advisory, если не просит иного.
+- Advisory публикуется после выхода исправленного релиза.
 Threat model: [`docs/SECURITY_THREAT_MODEL.md`](docs/SECURITY_THREAT_MODEL.md).

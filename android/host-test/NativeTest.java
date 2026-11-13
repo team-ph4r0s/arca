@@ -30,6 +30,26 @@ import org.arca.viewer.Native;
 public final class NativeTest {
     private static int checks = 0;
     private static final List<Object> KEEP = new ArrayList<>();
+    /**
+     * Temporary files of the run (copies of test documents). They are deleted explicitly before
+     * the JVM halts: Runtime.halt() skips shutdown hooks, so deleteOnExit() would leave them behind.
+     */
+    private static final List<File> TEMP = new ArrayList<>();
+
+    private static File tempFile(String prefix, String suffix) throws IOException {
+        File f = File.createTempFile(prefix, suffix);
+        TEMP.add(f);
+        return f;
+    }
+
+    private static void deleteTempFiles() {
+        for (File f : TEMP) {
+            if (f.exists() && !f.delete()) {
+                System.out.println("warning: could not delete " + f);
+            }
+        }
+        TEMP.clear();
+    }
 
     private static void check(boolean ok, String what) {
         checks++;
@@ -149,7 +169,7 @@ public final class NativeTest {
     private static void staticViews() {
         byte[] info = Native.info();
         check(has(info, "\"guestSha256\""), "info has the guest digest");
-        check(has(info, "\"abi\":8"), "info has the ABI version");
+        check(has(info, "\"abi\":9"), "info has the ABI version");
 
         for (int lang = 0; lang <= 1; lang++) {
             byte[] about = Native.about(lang);
@@ -337,8 +357,7 @@ public final class NativeTest {
         check(info != null && info.contains("\"verification\""), "sanitized info: " + info);
         check(info.contains("\"verdict\":\"Clean\""), "the sterile copy re-scans clean: " + info);
 
-        File out = File.createTempFile("arca-sterile", ".docx");
-        out.deleteOnExit();
+        File out = tempFile("arca-sterile", ".docx");
         long written = Native.sanitizedWriteFd(outcome, writableFd(out));
         check(written > 100, "bytes written: " + written);
         eq(written, out.length(), "file size equals the byte count");
@@ -356,13 +375,12 @@ public final class NativeTest {
         Native.docFree(again);
 
         // Writing to a descriptor that is not writable reports an error and still closes it.
-        File readonly = File.createTempFile("arca-ro", ".bin");
-        readonly.deleteOnExit();
+        File readonly = tempFile("arca-ro", ".bin");
         long failed = Native.sanitizedWriteFd(outcome, readableFd(readonly));
         check(failed < 0, "writing to a read-only descriptor fails: " + failed);
         eq(-Native.IO, failed, "the failure is IO");
         eq(-Native.BAD_ARGUMENT, Native.sanitizedWriteFd(outcome, -1), "negative descriptor");
-        eq(-Native.BAD_HANDLE, Native.sanitizedWriteFd(0, writableFd(File.createTempFile("arca-z", ".bin"))),
+        eq(-Native.BAD_HANDLE, Native.sanitizedWriteFd(0, writableFd(tempFile("arca-z", ".bin"))),
             "writing a missing outcome");
 
         Native.outcomeFree(outcome);
@@ -375,8 +393,7 @@ public final class NativeTest {
 
     private static void readingFromDescriptors() throws Exception {
         byte[] bytes = docxWithTracker();
-        File f = File.createTempFile("arca-in", ".docx");
-        f.deleteOnExit();
+        File f = tempFile("arca-in", ".docx");
         Files.write(f.toPath(), bytes);
 
         long doc = Native.docNew(64L << 20);
@@ -503,6 +520,7 @@ public final class NativeTest {
             }
         }
         System.out.println(checks + " checks, " + failed + " failed test(s)");
+        deleteTempFiles();
         System.out.flush();
         // halt: the descriptors kept in KEEP must never be closed a second time by a cleaner.
         Runtime.getRuntime().halt(failed == 0 ? 0 : 1);

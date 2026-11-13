@@ -15,7 +15,7 @@ options:
   deploymentTarget:
     iOS: "16.0"
   # The project file format of Xcode 15.3: XcodeGen's default (xcode16_0, object version 77) cannot be
-  # opened by Xcode 15.4, which is what the macos-14 CI runner and the stated minimum use.
+  # opened by Xcode 15.4, the stated minimum (CI builds on macos-15).
   projectFormat: xcode15_3
   createIntermediateGroups: true
   generateEmptyDirectories: false
@@ -23,8 +23,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "0.8.0"
-    CURRENT_PROJECT_VERSION: "8000"
+    MARKETING_VERSION: "0.8.1"
+    CURRENT_PROJECT_VERSION: "8001"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
 packages:
@@ -74,8 +74,7 @@ targets:
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - public.data
-        # No network: nothing to declare (no App Transport Security keys, no usage descriptions),
-        # and no encryption of its own beyond what the system provides.
+        # No network: nothing to declare (no App Transport Security keys, no usage descriptions).
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

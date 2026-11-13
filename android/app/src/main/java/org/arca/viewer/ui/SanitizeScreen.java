@@ -32,6 +32,11 @@ public final class SanitizeScreen extends Screen {
 
     // Kept while the app lives, so a rotation or a fold does not reset the choices.
     private static int selected = Native.SANITIZE_STRIP_METADATA | Native.SANITIZE_REMOVE_CUSTOM_XML;
+    /**
+     * The reader agreed that the sterile copy of a document opened with a password is written
+     * without encryption (the engine refuses such a copy without this consent).
+     */
+    private static boolean decryptedAgreed;
     private static boolean actionsOpen;
 
     public SanitizeScreen(MainActivity act) {
@@ -71,7 +76,40 @@ public final class SanitizeScreen extends Screen {
     /** The options to send: the size of a copy only means something for a picture. */
     private static int flagsFor(Session s) {
         String format = s.report() == null ? "" : s.report().format;
-        return Capabilities.isPicture(format) ? selected : selected & ~Native.SANITIZE_FULL_SIZE;
+        int flags = Capabilities.isPicture(format) ? selected : selected & ~Native.SANITIZE_FULL_SIZE;
+        // Only a document that was opened with a password needs (and gets) the consent.
+        return s.unlock() != 0 && decryptedAgreed ? flags | Native.SANITIZE_ALLOW_DECRYPTED_COPY : flags;
+    }
+
+    /**
+     * For a document opened with a password: the warning that the copy will open without one, and
+     * the reader's explicit agreement, without which the copy cannot be made.
+     */
+    private View decryptedConsent(final View start) {
+        LinearLayout warn = ui.banner(R.color.arca_warn_container);
+        TextView t = ui.heading(ui.str(R.string.sanitize_decrypted_warning_title), Ui.LABEL);
+        t.setTextColor(ui.color(R.color.arca_warn));
+        warn.addView(t);
+        warn.addView(ui.space(4));
+        warn.addView(ui.text(R.string.sanitize_decrypted_warning_text, Ui.BODY));
+        CheckBox agree = new CheckBox(act);
+        agree.setText(R.string.sanitize_decrypted_agree);
+        agree.setTextColor(ui.color(R.color.arca_on_surface));
+        agree.setButtonTintList(ColorStateList.valueOf(ui.color(R.color.arca_primary)));
+        agree.setMinHeight(ui.dp(Ui.TOUCH));
+        agree.setChecked(decryptedAgreed);
+        agree.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean checked) {
+                decryptedAgreed = checked;
+                start.setEnabled(checked);
+                start.setAlpha(checked ? 1f : 0.4f);
+            }
+        });
+        warn.addView(agree);
+        start.setEnabled(decryptedAgreed);
+        start.setAlpha(decryptedAgreed ? 1f : 0.4f);
+        return warn;
     }
 
     // ---- options ----------------------------------------------------------------------------
@@ -127,12 +165,19 @@ public final class SanitizeScreen extends Screen {
 
         col.addView(ui.text(R.string.sanitize_original_untouched, Ui.CAPTION), ui.fillWidth());
         col.addView(ui.space(16));
-        col.addView(ui.button(R.string.sanitize_start, Ui.PRIMARY, R.drawable.ic_sanitize, new View.OnClickListener() {
+        View start = ui.button(R.string.sanitize_start, Ui.PRIMARY, R.drawable.ic_sanitize, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 s.startSanitize(flagsFor(s));
             }
-        }), ui.fillWidth());
+        });
+        if (s.unlock() != 0) {
+            col.addView(decryptedConsent(start), ui.fillWidth());
+            col.addView(ui.space(12));
+        } else {
+            decryptedAgreed = false;
+        }
+        col.addView(start, ui.fillWidth());
         return page(header(ui.str(R.string.sanitize_title), true), scrollColumn(col, 640, Adaptive.padding(act)));
     }
 
@@ -232,8 +277,22 @@ public final class SanitizeScreen extends Screen {
             if (st.saved) {
                 LinearLayout ok = ui.banner(R.color.arca_safe_container);
                 ok.addView(ui.text(ui.str(R.string.sanitize_saved, Fmt.size(st.savedBytes)), Ui.BODY));
+                if (s.unlock() != 0) {
+                    ok.addView(ui.text(R.string.sanitize_decrypted_done, Ui.SMALL));
+                }
                 col.addView(ok, ui.fillWidth());
                 col.addView(ui.space(12));
+                if (st.savedUri != null) {
+                    final android.net.Uri copy = st.savedUri;
+                    final String mime = Fmt.mimeOf(info.format);
+                    col.addView(ui.button(R.string.share_sterile, Ui.PRIMARY, R.drawable.ic_share, new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            Share.send(act, copy, mime, R.string.share_sterile);
+                        }
+                    }), ui.fillWidth());
+                    col.addView(ui.space(8));
+                }
             } else if (st.saveFailure != null) {
                 LinearLayout bad = ui.banner(R.color.arca_danger_container);
                 TextView t = ui.heading(ui.str(R.string.sanitize_save_failed), Ui.LABEL);

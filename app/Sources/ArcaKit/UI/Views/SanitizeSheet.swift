@@ -58,6 +58,21 @@ public struct SanitizeSheet: View {
                     }
                 }
 
+                if state.sanitizedWithoutEncryption {
+                    // The user agreed to it; the sheet says it again where the copy is shared.
+                    HStack(alignment: .top, spacing: 10) {
+                        ArcaGlyph(.lock, size: 16, color: state.theme.accent)
+                        Text("Эта копия не зашифрована: она открывается без пароля. Храните её там, куда есть доступ только у вас.")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(state.theme.textPrimary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(state.theme.surfaceSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 20)
+                }
+
                 // Actions List
                 if !sanitized.info.actions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {

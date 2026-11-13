@@ -3,9 +3,9 @@
 
 //! # arca-guest-xray
 //!
-//! The parser guest implementing [`arca_abi`] version 5: Threat X-Ray
-//! (`Scan`), one-tap sterilisation (`Sanitize`) and the read-only content
-//! preview (`Preview`) in one module. Built for `wasm32-unknown-unknown` it is
+//! The parser guest implementing the current [`arca_abi`] version ([`arca_abi::ABI_VERSION`]): Threat X-Ray
+//! (`Scan`), one-tap sterilisation (`Sanitize`), the read-only content
+//! preview (`Preview`), page drawings (`Render`) and pictures (`Image`) in one module. Built for `wasm32-unknown-unknown` it is
 //! a module with **zero imports**: it can compute, and nothing else.
 //!
 //! ```text
@@ -101,6 +101,16 @@ pub fn process(input: &[u8]) -> (i32, Vec<u8>) {
             }
             seal(PayloadKind::XRayReport, &report, "could not encode the X-ray report")
         }
+        Op::Sanitize if success != status::OK && req.flags & flags::ALLOW_DECRYPTED_COPY == 0 => {
+            // The copy would be written from the decrypted content, without the encryption the
+            // reader's file has: never without the reader's explicit agreement.
+            return (
+                status::DECRYPTED_COPY_REFUSED,
+                error_envelope(
+                    "the document was opened with a password or a built-in one; its sterile copy would not be encrypted: ask the reader and send ALLOW_DECRYPTED_COPY",
+                ),
+            );
+        }
         Op::Sanitize => sanitize(&document, req.flags),
         Op::Preview => preview(&document, req.flags),
         Op::Render => render(&document, req.flags),
@@ -109,10 +119,44 @@ pub fn process(input: &[u8]) -> (i32, Vec<u8>) {
     if code == status::OK { (success, envelope) } else { (code, envelope) }
 }
 
-/// Whether `data` is a PDF that declares an encryption dictionary.
+/// Whether `data` is a PDF that declares an encryption dictionary. The key is matched as a PDF
+/// name with its `#xx` escapes decoded, as a reader decodes it: `/Encr#79pt` is `/Encrypt`.
 fn is_encrypted_pdf(data: &[u8]) -> bool {
     data.get(..data.len().min(1024)).is_some_and(|h| h.windows(5).any(|w| w == b"%PDF-"))
-        && data.windows(8).any(|w| w == b"/Encrypt")
+        && (data.windows(8).any(|w| w == b"/Encrypt") || has_escaped_name(data, b"Encrypt"))
+}
+
+/// Whether some `/Name` token of `data` with at least one `#xx` escape decodes to `want`.
+fn has_escaped_name(data: &[u8], want: &[u8]) -> bool {
+    let ends = |b: u8| b.is_ascii_whitespace() || b"\0()<>[]{}/%".contains(&b);
+    let mut rest = data;
+    while let Some(at) = rest.iter().position(|&b| b == b'/') {
+        rest = rest.get(at + 1..).unwrap_or_default();
+        let len = rest.iter().position(|&b| ends(b)).unwrap_or(rest.len()).min(3 * want.len());
+        let token = rest.get(..len).unwrap_or_default();
+        if !token.contains(&b'#') {
+            continue;
+        }
+        let mut name = Vec::with_capacity(token.len());
+        let mut i = 0;
+        while let Some(&b) = token.get(i) {
+            let hex = token.get(i + 1..i + 3).and_then(|h| core::str::from_utf8(h).ok());
+            match hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                Some(v) if b == b'#' => {
+                    name.push(v);
+                    i += 3;
+                }
+                _ => {
+                    name.push(b);
+                    i += 1;
+                }
+            }
+        }
+        if name == want {
+            return true;
+        }
+    }
+    false
 }
 
 /// A document ready to be worked on.
@@ -820,8 +864,16 @@ mod tests {
         let (kind, payload) = open(&env);
         let p = decode_preview(kind, payload).unwrap();
         assert!(format!("{:?}", p.sections).contains("Квартальный отчёт"));
-        let (code, env) =
+        // Without the reader's consent the copy (which would not be encrypted) is refused.
+        let (code, _) =
             process(&with_password(Op::Sanitize, flags::SANITIZE_ALL, "пароль-123", &enc));
+        assert_eq!(code, status::DECRYPTED_COPY_REFUSED);
+        let (code, env) = process(&with_password(
+            Op::Sanitize,
+            flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY,
+            "пароль-123",
+            &enc,
+        ));
         assert_eq!(code, status::OK_DECRYPTED);
         let (kind, payload) = open(&env);
         let sd = decode_sanitized(kind, payload).unwrap();
@@ -830,6 +882,23 @@ mod tests {
         // A password given for a file that needs none changes nothing.
         let (code, _) = process(&with_password(Op::Preview, 0, "x", &fixture("report.docx")));
         assert_eq!(code, status::OK);
+    }
+
+    #[test]
+    fn an_encryption_key_written_with_escapes_still_opens_with_the_password() {
+        // `/Encr#79pt` is the name `/Encrypt` to every PDF reader; the password must not be
+        // ignored because the key is spelled with an escape.
+        let plain = fixture("enc-aes-128.pdf");
+        let at = plain.windows(8).position(|w| w == b"/Encrypt").unwrap();
+        let mut escaped = plain.clone();
+        escaped.splice(at..at + 8, b"/Encr#79pt".iter().copied());
+        let (code, _) = process(&with_password(Op::Scan, 0, "pässword", &escaped));
+        assert_eq!(code, status::OK_DECRYPTED);
+        let (code, _) = process(&with_password(Op::Preview, 0, "pässword", &escaped));
+        assert_eq!(code, status::OK_DECRYPTED);
+        // A name that only looks alike is not the key.
+        assert!(!has_escaped_name(b"%PDF-1.7 /Encr#79ptx 1", b"Encrypt"));
+        assert!(has_escaped_name(b"%PDF-1.7 /#45#6E#63#72#79#70#74 1", b"Encrypt"));
     }
 
     #[test]
@@ -864,7 +933,10 @@ mod tests {
             decode_preview(kind, payload).unwrap().sections.len(),
             decode_preview(direct_kind, direct_payload).unwrap().sections.len()
         );
-        let (code, env) = process(&request_for(Op::Sanitize, flags::SANITIZE_ALL, &enc));
+        let (code, _) = process(&request_for(Op::Sanitize, flags::SANITIZE_ALL, &enc));
+        assert_eq!(code, status::DECRYPTED_COPY_REFUSED, "the built-in password needs consent too");
+        let consented = flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY;
+        let (code, env) = process(&request_for(Op::Sanitize, consented, &enc));
         assert_eq!(code, status::OK_UNLOCKED);
         let (kind, payload) = open(&env);
         assert_eq!(decode_sanitized(kind, payload).unwrap().format, FileFormat::Xlsx);
@@ -1011,8 +1083,15 @@ mod tests {
             process(&with_password(Op::Preview, 0, "user-256", &locked)).0,
             status::OK_DECRYPTED
         );
-        let (code, env) =
+        let (code, _) =
             process(&with_password(Op::Sanitize, flags::SANITIZE_ALL, "user-256", &locked));
+        assert_eq!(code, status::DECRYPTED_COPY_REFUSED);
+        let (code, env) = process(&with_password(
+            Op::Sanitize,
+            flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY,
+            "user-256",
+            &locked,
+        ));
         assert_eq!(code, status::OK_DECRYPTED);
         let (kind, payload) = open(&env);
         assert_eq!(decode_sanitized(kind, payload).unwrap().format, FileFormat::Pdf);

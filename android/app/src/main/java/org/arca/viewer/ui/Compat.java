@@ -65,6 +65,24 @@ public final class Compat {
         }
     }
 
+    /**
+     * The certificate the installed app is signed with (the current one after a key rotation), or
+     * {@code null} when the system does not say or there is more than one signer.
+     */
+    @SuppressWarnings("deprecation")
+    public static android.content.pm.Signature signingCertificate(android.content.Context c) {
+        try {
+            if (Build.VERSION.SDK_INT >= 28) {
+                return Api28.signingCertificate(c);
+            }
+            android.content.pm.PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(),
+                android.content.pm.PackageManager.GET_SIGNATURES);
+            return info.signatures != null && info.signatures.length == 1 ? info.signatures[0] : null;
+        } catch (android.content.pm.PackageManager.NameNotFoundException | RuntimeException e) {
+            return null;
+        }
+    }
+
     /** Marks a view as a heading for screen readers (API 28+). */
     public static void markHeading(View v) {
         if (Build.VERSION.SDK_INT >= 28) {
@@ -297,6 +315,18 @@ public final class Compat {
 
     /** API 28+ calls, isolated so that older devices never load them. */
     private static final class Api28 {
+        static android.content.pm.Signature signingCertificate(android.content.Context c)
+            throws android.content.pm.PackageManager.NameNotFoundException {
+            android.content.pm.PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(),
+                android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES);
+            android.content.pm.SigningInfo si = info.signingInfo;
+            if (si == null || si.hasMultipleSigners()) {
+                return null;
+            }
+            android.content.pm.Signature[] history = si.getSigningCertificateHistory();
+            return history == null || history.length == 0 ? null : history[history.length - 1];
+        }
+
         static void clearClipIfOurs(android.content.ClipboardManager cm, android.content.ClipData ours) {
             // Only clear what we put there: the reader may have copied something else since.
             // A clip that cannot be read (background app on API 29+) is cleared too: best effort.

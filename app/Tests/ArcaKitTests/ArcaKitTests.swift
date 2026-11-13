@@ -13,6 +13,7 @@ final class ArcaKitTests: XCTestCase {
         XCTAssertEqual(ArcaError(code: 6), .encrypted)
         XCTAssertEqual(ArcaError(code: 10), .badHandle)
         XCTAssertEqual(ArcaError(code: 14), .wrongPassword)
+        XCTAssertEqual(ArcaError(code: 15), .decryptedCopyRefused)
 
         XCTAssertEqual(ArcaError(handleOrCode: -10), .badHandle)
         XCTAssertEqual(ArcaError(handleOrCode: 42), .ok)
@@ -268,8 +269,8 @@ final class ArcaKitTests: XCTestCase {
                         "support": [
                             { "label": "Lava.top", "url": "https://lava.top/arca" }
                         ],
-                        "homepage": "https://github.com/Johnny-Wickky/arca",
-                        "source": "https://github.com/Johnny-Wickky/arca",
+                        "homepage": "https://github.com/team-ph4r0s/arca",
+                        "source": "https://github.com/team-ph4r0s/arca",
                         "modifications": ""
                     }
                 ],

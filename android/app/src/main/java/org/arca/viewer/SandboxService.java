@@ -36,6 +36,11 @@ public final class SandboxService extends Service {
             if (code < FIRST_CALL_TRANSACTION || code > LAST_CALL_TRANSACTION || reply == null) {
                 return super.onTransact(code, data, reply, flags);
             }
+            // Only the app that bound this service may call it. The service is not exported, so
+            // the system already keeps other apps out; this is the check of the service itself.
+            if (parentUid < 0 || Binder.getCallingUid() != parentUid) {
+                return false;
+            }
             try {
                 data.enforceInterface(SandboxProtocol.DESCRIPTOR);
                 return dispatch(code, data, reply);
@@ -45,8 +50,19 @@ public final class SandboxService extends Service {
         }
     };
 
+    /** The uid of the app that may call (see {@link #onBind}), or -1 before the first bind. */
+    private volatile int parentUid = -1;
+
+    /** The extra in which the app names its own uid when it binds (see {@code Isolation}). */
+    static final String EXTRA_PARENT_UID = "org.arca.viewer.PARENT_UID";
+
     @Override
     public IBinder onBind(Intent intent) {
+        // The app says who it is, and the package says the same: the isolated process runs
+        // under a throw-away uid, but its ApplicationInfo still names the app's own one.
+        int claimed = intent == null ? -1 : intent.getIntExtra(EXTRA_PARENT_UID, -1);
+        int app = getApplicationInfo().uid;
+        parentUid = claimed >= 0 && claimed == app ? claimed : -1;
         return binder;
     }
 

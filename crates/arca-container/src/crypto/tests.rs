@@ -318,3 +318,73 @@ fn bad_padding_of_every_kind_is_the_same_answer() {
     assert_eq!(aes::unpad_pkcs7(vec![1; 15].into_iter().chain([1]).collect()), Some(vec![1; 15]));
     assert_eq!(aes::unpad_pkcs7(vec![16; 16]), Some(Vec::new()));
 }
+
+/// Known-answer tests from the standards themselves (not from another implementation):
+/// FIPS 197 appendix C (AES block), SP 800-38A F.2.2 (AES-128-CBC decryption), FIPS 180-4
+/// examples (SHA-1, SHA-384, SHA-512), RFC 1321 appendix A.5 (MD5) and RFC 6229 (RC4).
+#[test]
+fn standard_known_answer_vectors() {
+    // FIPS 197, C.1 and C.3.
+    let pt: [u8; 16] = unhex("00112233445566778899aabbccddeeff").try_into().unwrap();
+    for (key, ct) in [
+        ("000102030405060708090a0b0c0d0e0f", "69c4e0d86a7b0430d8cdb78070b4c55a"),
+        (
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+            "8ea2b7ca516745bfeafc49904b496089",
+        ),
+    ] {
+        let aes = aes::Aes::new(&unhex(key)).unwrap();
+        let mut block = pt;
+        aes.encrypt_block(&mut block);
+        assert_eq!(hex(&block), ct, "AES encrypt, key {key}");
+        aes.decrypt_block(&mut block);
+        assert_eq!(block, pt, "AES decrypt, key {key}");
+    }
+    // SP 800-38A, F.2.2 CBC-AES128.Decrypt (two blocks).
+    let aes = aes::Aes::new(&unhex("2b7e151628aed2a6abf7158809cf4f3c")).unwrap();
+    let iv = unhex("000102030405060708090a0b0c0d0e0f");
+    let ct = unhex("7649abac8119b246cee98e9b12e9197d5086cb9b507219ee95db113a917678b2");
+    assert_eq!(
+        hex(&aes.cbc_decrypt(&iv, &ct).unwrap()),
+        "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51"
+    );
+    // FIPS 180-4 examples.
+    let two_block = b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    assert_eq!(hex(&sha1::sha1(b"abc")), "a9993e364706816aba3e25717850c26c9cd0d89d");
+    assert_eq!(hex(&sha1::sha1(two_block)), "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
+    assert_eq!(
+        hex(&sha1::sha1(&vec![b'a'; 1_000_000])),
+        "34aa973cd4c4daa4f61eeb2bdbad27316534016f"
+    );
+    assert_eq!(
+        hex(&Hash::Sha384.digest(&[b"abc"])),
+        "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"
+    );
+    assert_eq!(
+        hex(&Hash::Sha512.digest(&[b"abc"])),
+        "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+    );
+    assert_eq!(
+        hex(&Hash::Sha512.digest(&[b""])),
+        "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+    );
+    // RFC 1321, A.5.
+    for (m, d) in [
+        ("", "d41d8cd98f00b204e9800998ecf8427e"),
+        ("abc", "900150983cd24fb0d6963f7d28e17f72"),
+        ("message digest", "f96b697d7cb7938d525a2f31aaf161d0"),
+        (
+            "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+            "57edf4a22be3c955ac49da2e2107b67a",
+        ),
+    ] {
+        assert_eq!(hex(&md5::md5(m.as_bytes())), d, "MD5 {m:?}");
+    }
+    // RFC 6229: 40-bit key 0102030405 at offsets 0 and 16; 64-bit key 0102030405060708 at 0.
+    let stream = rc4::rc4(&[1, 2, 3, 4, 5], &[0u8; 32]);
+    assert_eq!(hex(&stream), "b2396305f03dc027ccc3524a0a1118a86982944f18fc82d589c403a47a0d0919");
+    assert_eq!(
+        hex(&rc4::rc4(&[1, 2, 3, 4, 5, 6, 7, 8], &[0u8; 16])),
+        "97ab8a1bf0afb96132f2f67258da15a8"
+    );
+}

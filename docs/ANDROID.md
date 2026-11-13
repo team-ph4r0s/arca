@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# Arca для Android (v0.8.0)
+# Arca для Android (v0.8.1)
 
 Приложение, которое открывает Word, Excel, PowerPoint, OpenDocument, RTF, PDF и письма
 Outlook так, как будто файл — враждебный: сначала «рентген безопасности», потом
@@ -403,7 +403,7 @@ ANDROID_HOME=… ARCA_NATIVE_DIR=… ARCA_THROWAWAY_KEY=1 bash tools/android/bui
 * отсутствие сетевых соединений во время работы.
 
 **Распространение и обновления.** Сейчас приложение распространяется подписанным APK в
-[GitHub Releases](https://github.com/Johnny-Wickky/arca/releases). В приложении нет самозагрузчика
+[GitHub Releases](https://github.com/team-ph4r0s/arca/releases). В приложении нет самозагрузчика
 и нет сети (разрешения `INTERNET` нет), поэтому оно обновляется установкой новой версии поверх старой:
 пользователь скачивает новый APK, сверяет SHA-256 и ставит поверх старого. Android принимает обновление,
 только если оно подписано тем же ключом.

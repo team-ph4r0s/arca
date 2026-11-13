@@ -82,11 +82,13 @@ mkdir -p "$ASSETS"
 cargo run --quiet --locked --manifest-path "$ROOT/Cargo.toml" -p arca-devtools ${ARCA_CARGO_FLAGS:-} -- third-party --root "$ROOT" --out "$ASSETS/THIRD_PARTY_NOTICES.txt"
 
 mkdir -p "$WORK/gen"
+# --replace-version: without it aapt2 keeps the versionName / versionCode written in the
+# manifest and ignores ARCA_VERSION_NAME / ARCA_VERSION_CODE.
 "$AAPT2" link \
     -I "$ANDROID_JAR" \
     --manifest "$APP/AndroidManifest.xml" \
     --min-sdk-version "$MIN_SDK" --target-sdk-version "$TARGET_SDK" \
-    --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" \
+    --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" --replace-version \
     -A "$ASSETS" \
     --java "$WORK/gen" \
     -0 arsc \

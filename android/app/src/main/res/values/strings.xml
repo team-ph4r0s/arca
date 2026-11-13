@@ -60,9 +60,15 @@
     <string name="err_unsupported_title">Not a supported document</string>
     <string name="err_unsupported_text">Arca does not know how to read this kind of file, so it shows nothing from it. The file has not been opened or run.</string>
     <string name="err_encrypted_title">Document is encrypted</string>
-    <string name="err_encrypted_text">The content is protected by a password, so it cannot be inspected without it. Arca asks for a password only to open the file inside its sandbox; it never keeps it and never tries to guess it.</string>
+    <string name="err_encrypted_text">The content is protected by a password, so it cannot be inspected without it. Arca asks for a password only to open the file inside its sandbox; it never keeps it. The only password Arca tries by itself is the one Excel applies without asking (“VelvetSweatshop”), as Excel does.</string>
     <string name="err_wrong_password_title">Wrong password</string>
     <string name="err_wrong_password_text">The password does not open this document. Nothing was opened.</string>
+    <string name="err_decrypted_copy_title">The copy would not be encrypted</string>
+    <string name="err_decrypted_copy_text">This document was opened with a password. Its sterile copy would be saved without that password: anyone who gets the copy can read it. Arca makes such a copy only after you agree.</string>
+    <string name="sanitize_decrypted_warning_title">The sterile copy will not be encrypted</string>
+    <string name="sanitize_decrypted_warning_text">The original is protected by a password (or by the one Excel applies by itself). The sterile copy is written from the decrypted content and will open without any password. Keep it where only you can reach it, or do not make it.</string>
+    <string name="sanitize_decrypted_agree">I understand: make a copy without encryption</string>
+    <string name="sanitize_decrypted_done">This copy is not encrypted: it opens without a password.</string>
     <string name="password_card_title">Password protected</string>
     <string name="password_card_text">If you know the password, Arca opens the file inside its sandbox and checks what is in it. The password is used once, kept only in memory and wiped when you close the document.</string>
     <string name="password_button">Enter password</string>
@@ -136,6 +142,25 @@
     <string name="slides_failed">Couldn’t render this slide.</string>
     <string name="finding_evidence">What Arca found</string>
     <string name="finding_location">Location in the file</string>
+    <string name="finding_danger">Why it matters</string>
+    <string name="finding_done">What Arca did</string>
+    <string name="finding_advice">What to do</string>
+    <string name="finding_done_blocked">In Arca this part does not run and loads nothing: the view, the report and the sterile copy work without it. It is still inside the original file.</string>
+    <string name="finding_done_shown">Arca only reports this; there is nothing in it to run. The original file is not changed.</string>
+    <string name="danger_active_content">This is code or a command inside the document. In Word, Excel, PowerPoint, a PDF reader or LibreOffice it can run when the file is opened or when you click: it can download and start a program, change or steal files, or take over the computer. This is how most attacks through documents begin.</string>
+    <string name="advice_active_content">Do not open the original in an office program or a PDF reader, and do not allow macros, content or editing if they ask. Read it here, or make a sterile copy and share that. If you did not expect such a file, ask the sender by another channel whether they really sent it.</string>
+    <string name="danger_remote_content">The document refers to something on the internet or on another computer. When it is opened elsewhere, the program may fetch it: the sender learns that and when you opened the file and your IP address, and on Windows the request can leak your account name and password hash. The fetched part can also change what you see.</string>
+    <string name="advice_remote_content">Arca loads nothing from the network. If you open the original elsewhere, do it offline or decline updating links and external content; a sterile copy has these links removed.</string>
+    <string name="danger_concealment">Something in the file is hidden from the reader or disguised: white or tiny text, hidden sheets, a file pretending to be another type, content after the end of the document. On its own it may be harmless, but it is a common way to hide a payload or to trick a filter.</string>
+    <string name="advice_concealment">Look at the hidden parts in the safe view (they are shown there). Be careful if the visible content asks you to enable something or to open another file.</string>
+    <string name="danger_structural">The file is built in an unusual or broken way. Such files are used to crash programs or to exploit errors in them; sometimes they are just damaged.</string>
+    <string name="advice_structural">Do not open the original in other programs, especially outdated ones. If you need the content, use the safe view or a sterile copy.</string>
+    <string name="danger_encryption">The document is encrypted. While it is encrypted, antivirus programs and filters cannot look inside, which is why attackers send encrypted files with the password in the message.</string>
+    <string name="advice_encryption">Open it here with the password: Arca checks the content after decryption. Be suspicious of a password that arrived together with an unexpected file.</string>
+    <string name="danger_privacy_leak">The file says something about its author or about you: names, accounts, paths on a computer, comments, revision history, location of photos. If you send it on, the recipients see this too.</string>
+    <string name="advice_privacy_leak">Before you send the file to someone, make a sterile copy with the data about the author removed.</string>
+    <string name="danger_other">This is a feature of the file that Arca noted. Read the details below.</string>
+    <string name="advice_other">If in doubt, read the document here and share a sterile copy instead of the original.</string>
     <string name="macros_note">The source of every macro is shown as text for you to read. It cannot run here.</string>
     <string name="macro_autoexec">Runs on its own when the document opens</string>
     <string name="macro_suspicious">Suspicious calls</string>
@@ -164,6 +189,16 @@
     <string name="share_report_subject">Arca report</string>
     <string name="share_report_header">Arca threat report</string>
     <string name="share_report_footer">Made by Arca. The document was inspected in an isolated sandbox and was not opened or run.</string>
+    <string name="share_document">Share the document</string>
+    <string name="share_sterile">Share the sterile copy</string>
+    <string name="share_unavailable">This document can’t be shared from Arca. Share it from the app you opened it in.</string>
+    <string name="share_risky_title">Share a document with active content?</string>
+    <string name="share_risky_message">Arca blocked the active content only here. The person who receives the original and opens it in an office program or a PDF reader is not protected by Arca. A sterile copy is safer to send.</string>
+    <string name="share_risky_sterile">Make a sterile copy</string>
+    <string name="share_risky_anyway">Send the original</string>
+    <string name="pages_mode_scroll">Scroll through all pages</string>
+    <string name="pages_mode_single">One page at a time</string>
+    <string name="pages_waiting">Page %1$d is being drawn…</string>
 
     <!-- Preview -->
     <string name="preview_title">Safe preview</string>
@@ -269,6 +304,8 @@
     <string name="about_homepage">Project page</string>
     <string name="about_source">Source code</string>
     <string name="about_fingerprint">Attribution fingerprint</string>
+    <string name="about_signing_cert">Signing certificate (SHA-256)</string>
+    <string name="about_signing_cert_hint">Official Arca builds are signed with the certificate whose SHA-256 is published in the project README at github.com/team-ph4r0s/arca. If the values differ, this is not an official build.</string>
 
     <!-- Licences -->
     <string name="licenses_agpl">AGPLv3</string>

@@ -150,6 +150,21 @@ final class ArcaEngineTests: XCTestCase {
         XCTAssertEqual(opened.format, "Docx")
     }
 
+    func testACopyOfADecryptedDocumentNeedsConsent() async throws {
+        let engine = ArcaEngine.shared
+        let session = try await engine.openDocument(at: try fixture("enc-agile.xlsx"))
+        defer { session.close() }
+        do {
+            _ = try await engine.sanitize(document: session, password: "s3cret")
+            XCTFail("an unencrypted copy of an encrypted document must not be made without consent")
+        } catch let error as ArcaError {
+            XCTAssertEqual(error, .decryptedCopyRefused)
+        }
+        let copy = try await engine.sanitize(
+            document: session, flags: ArcaFlag.sanitizeAll | ArcaFlag.allowDecryptedCopy, password: "s3cret")
+        XCTAssertEqual(Array(copy.bytes.prefix(2)), [0x50, 0x4B], "an ordinary, unencrypted package")
+    }
+
     func testSterileCopyIsVerifiedClean() async throws {
         let engine = ArcaEngine.shared
         let session = try await engine.openDocument(at: try fixture("report.docx"))

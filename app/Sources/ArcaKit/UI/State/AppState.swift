@@ -27,6 +27,10 @@ public final class AppState: ObservableObject {
     @Published public var passwordInput: String = ""
     @Published public var isSanitizeInProgress: Bool = false
     @Published public var sanitizedDocument: SanitizedDocument?
+    /// The engine asked for the user's consent to a copy without encryption (see `sanitizeCurrentDocument`).
+    @Published public var isDecryptedCopyConsentVisible: Bool = false
+    /// The sterile copy on screen was made from a decrypted document and is not encrypted.
+    @Published public private(set) var sanitizedWithoutEncryption: Bool = false
     @Published public var inspectedMacro: MacroModule?
     @Published public var inspectedImage: DecodedImage?
     @Published public var activeError: ArcaError?
@@ -216,16 +220,26 @@ public final class AppState: ObservableObject {
     // MARK: - One-Tap Sanitize
 
     /// Triggers one-tap sterilization of the currently active document.
-    public func sanitizeCurrentDocument() {
+    ///
+    /// A document that was opened with a password (or the one Excel applies by itself) gets a
+    /// copy without that encryption: the engine refuses it until the user agreed, so the first
+    /// refusal shows the question (`isDecryptedCopyConsentVisible`) and the answer calls this
+    /// again with `allowDecryptedCopy: true`.
+    public func sanitizeCurrentDocument(allowDecryptedCopy: Bool = false) {
         guard let session = activeDocument else { return }
         isSanitizeInProgress = true
+        let flags = allowDecryptedCopy ? ArcaFlag.sanitizeAll | ArcaFlag.allowDecryptedCopy : ArcaFlag.sanitizeAll
 
         Task {
             do {
-                let cleanDoc = try await engine.sanitize(document: session)
+                let cleanDoc = try await engine.sanitize(document: session, flags: flags)
+                self.sanitizedWithoutEncryption = allowDecryptedCopy
                 self.sanitizedDocument = cleanDoc
                 self.isSanitizeInProgress = false
                 ArcaHaptics.sanitizeSuccess()
+            } catch ArcaError.decryptedCopyRefused {
+                self.isSanitizeInProgress = false
+                self.isDecryptedCopyConsentVisible = true
             } catch let err as ArcaError {
                 self.isSanitizeInProgress = false
                 handleError(err)

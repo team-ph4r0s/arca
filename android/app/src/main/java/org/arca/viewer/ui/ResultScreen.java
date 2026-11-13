@@ -258,25 +258,34 @@ public final class ResultScreen extends Screen {
 
     private View counters(Model.Report r) {
         LinearLayout row = ui.hbox();
-        row.setGravity(Gravity.TOP);
-        row.addView(tile(r.trackers, R.string.stat_trackers, r.trackers > 0 ? R.color.arca_warn : R.color.arca_on_surface), ui.weight(1f));
+        // The tiles stretch to the tallest one (a label of one line next to one of two lines).
+        row.setBaselineAligned(false);
+        row.addView(tile(r.trackers, R.string.stat_trackers, r.trackers > 0 ? R.color.arca_warn : R.color.arca_on_surface), tileParams());
         row.addView(ui.hspace(8));
-        row.addView(tile(r.active, R.string.stat_active, r.active > 0 ? R.color.arca_danger : R.color.arca_on_surface), ui.weight(1f));
+        row.addView(tile(r.active, R.string.stat_active, r.active > 0 ? R.color.arca_danger : R.color.arca_on_surface), tileParams());
         row.addView(ui.hspace(8));
-        row.addView(tile(r.findings.size(), R.string.stat_findings, R.color.arca_on_surface), ui.weight(1f));
+        row.addView(tile(r.findings.size(), R.string.stat_findings, R.color.arca_on_surface), tileParams());
         return row;
+    }
+
+    private static LinearLayout.LayoutParams tileParams() {
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
     }
 
     private View tile(long value, int labelRes, int colorRes) {
         LinearLayout l = ui.card();
-        l.setGravity(Gravity.CENTER_HORIZONTAL);
+        // The number and its label are centred both ways in the tile.
+        l.setGravity(Gravity.CENTER);
         l.setPadding(ui.dp(8), ui.dp(12), ui.dp(8), ui.dp(12));
         TextView v = ui.text(Long.toString(value), Ui.HEADLINE);
         v.setTextColor(ui.color(colorRes));
-        l.addView(v);
+        v.setGravity(Gravity.CENTER);
+        v.setIncludeFontPadding(false);
+        l.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        l.addView(ui.space(4));
         TextView label = ui.text(labelRes, Ui.CAPTION);
         label.setGravity(Gravity.CENTER);
-        l.addView(label);
+        l.addView(label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         l.setContentDescription(value + " " + ui.str(labelRes));
         return l;
     }
@@ -321,6 +330,20 @@ public final class ResultScreen extends Screen {
         if (!sanitize) {
             col.addView(ui.text(rejected ? R.string.sanitize_blocked_rejected : R.string.sanitize_not_available, Ui.CAPTION));
         }
+        col.addView(ui.space(8));
+        final boolean canSterile = sanitize;
+        col.addView(ui.button(R.string.share_document, Ui.OUTLINE, R.drawable.ic_share, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Session s = Session.get();
+                Share.original(act, s.uri(), s.mime(), r, canSterile ? new Runnable() {
+                    @Override
+                    public void run() {
+                        act.push(MainActivity.Route.SANITIZE);
+                    }
+                } : null);
+            }
+        }), ui.fillWidth());
         return col;
     }
 
@@ -446,6 +469,7 @@ public final class ResultScreen extends Screen {
                 continue;
             }
             rows.add(groupHeader(Labels.category(act, cat) + " · " + idx.size()));
+            rows.add(categoryNote(cat));
             for (int i : idx) {
                 rows.add(findingCard(r.findings.get(i)));
                 placed.add(i);
@@ -459,6 +483,7 @@ public final class ResultScreen extends Screen {
         }
         if (!other.isEmpty()) {
             rows.add(groupHeader(ui.str(R.string.category_other) + " · " + other.size()));
+            rows.add(categoryNote(""));
             for (int i : other) {
                 rows.add(findingCard(r.findings.get(i)));
             }
@@ -504,6 +529,61 @@ public final class ResultScreen extends Screen {
         }
     }
 
+    /**
+     * What the finding means for the person: why such a thing is dangerous (by its category), what
+     * Arca did about it here, and what to do with the original.
+     */
+    private void addMeaning(LinearLayout card, Model.Finding f) {
+        addSection(card, R.string.finding_done, f.blocked ? R.string.finding_done_blocked : R.string.finding_done_shown);
+    }
+
+    /**
+     * Under the heading of a group of findings, once for the group: why findings of this category
+     * are dangerous and what to do with the original (the same for every card of the group).
+     */
+    private View categoryNote(String category) {
+        LinearLayout note = ui.banner(R.color.arca_surface_variant);
+        note.addView(ui.text(R.string.finding_danger, Ui.LABEL));
+        note.addView(ui.text(dangerOf(category), Ui.SMALL));
+        note.addView(ui.space(8));
+        note.addView(ui.text(R.string.finding_advice, Ui.LABEL));
+        note.addView(ui.text(adviceOf(category), Ui.SMALL));
+        LinearLayout.LayoutParams lp = ui.fillWidth();
+        lp.bottomMargin = ui.dp(8);
+        note.setLayoutParams(lp);
+        return note;
+    }
+
+    private void addSection(LinearLayout card, int headingRes, int textRes) {
+        card.addView(ui.space(8));
+        card.addView(ui.text(headingRes, Ui.LABEL));
+        card.addView(ui.text(textRes, Ui.SMALL));
+    }
+
+    private static int dangerOf(String category) {
+        switch (category) {
+            case "ActiveContent": return R.string.danger_active_content;
+            case "RemoteContent": return R.string.danger_remote_content;
+            case "Concealment": return R.string.danger_concealment;
+            case "Structural": return R.string.danger_structural;
+            case "Encryption": return R.string.danger_encryption;
+            case "PrivacyLeak": return R.string.danger_privacy_leak;
+            default: return R.string.danger_other;
+        }
+    }
+
+    private static int adviceOf(String category) {
+        switch (category) {
+            case "ActiveContent": return R.string.advice_active_content;
+            case "RemoteContent": return R.string.advice_remote_content;
+            case "Concealment": return R.string.advice_concealment;
+            case "Structural": return R.string.advice_structural;
+            case "Encryption": return R.string.advice_encryption;
+            case "PrivacyLeak": return R.string.advice_privacy_leak;
+            default: return R.string.advice_other;
+        }
+    }
+
     private View groupHeader(String text) {
         TextView t = ui.heading(text, Ui.LABEL);
         t.setPadding(0, ui.dp(12), 0, ui.dp(6));
@@ -532,6 +612,7 @@ public final class ResultScreen extends Screen {
         card.addView(ui.space(8));
         card.addView(ui.text(Labels.threatText(act, f.kind), Ui.BODY));
         addMacroIntent(card, f);
+        addMeaning(card, f);
         if (!f.detail.isEmpty()) {
             card.addView(ui.space(6));
             card.addView(ui.text(R.string.finding_evidence, Ui.CAPTION));

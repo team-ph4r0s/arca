@@ -21,7 +21,7 @@
 ## 2. Быстрый путь: собрать и запустить
 
 ```bash
-git clone https://github.com/Johnny-Wickky/arca.git
+git clone https://github.com/team-ph4r0s/arca.git
 cd arca
 rustup show                          # поставит Rust 1.97.0 и цели из rust-toolchain.toml
 brew install xcodegen
