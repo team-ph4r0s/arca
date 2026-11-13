@@ -10,8 +10,8 @@
      every other scheme in code too (it is exported, so any app can send it a file:// path). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.arca.viewer"
-    android:versionCode="8000"
-    android:versionName="0.8.0">
+    android:versionCode="8001"
+    android:versionName="0.8.1">
 
     <!-- The supported API range is stated explicitly: aapt2 (build-tools 36) no longer writes a
          default sdkVersion into the package when <uses-sdk> is absent, so the built APK would carry
