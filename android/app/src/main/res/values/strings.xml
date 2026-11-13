@@ -60,9 +60,15 @@
     <string name="err_unsupported_title">Not a supported document</string>
     <string name="err_unsupported_text">Arca does not know how to read this kind of file, so it shows nothing from it. The file has not been opened or run.</string>
     <string name="err_encrypted_title">Document is encrypted</string>
-    <string name="err_encrypted_text">The content is protected by a password, so it cannot be inspected without it. Arca asks for a password only to open the file inside its sandbox; it never keeps it and never tries to guess it.</string>
+    <string name="err_encrypted_text">The content is protected by a password, so it cannot be inspected without it. Arca asks for a password only to open the file inside its sandbox; it never keeps it. The only password Arca tries by itself is the one Excel applies without asking (“VelvetSweatshop”), as Excel does.</string>
     <string name="err_wrong_password_title">Wrong password</string>
     <string name="err_wrong_password_text">The password does not open this document. Nothing was opened.</string>
+    <string name="err_decrypted_copy_title">The copy would not be encrypted</string>
+    <string name="err_decrypted_copy_text">This document was opened with a password. Its sterile copy would be saved without that password: anyone who gets the copy can read it. Arca makes such a copy only after you agree.</string>
+    <string name="sanitize_decrypted_warning_title">The sterile copy will not be encrypted</string>
+    <string name="sanitize_decrypted_warning_text">The original is protected by a password (or by the one Excel applies by itself). The sterile copy is written from the decrypted content and will open without any password. Keep it where only you can reach it, or do not make it.</string>
+    <string name="sanitize_decrypted_agree">I understand: make a copy without encryption</string>
+    <string name="sanitize_decrypted_done">This copy is not encrypted: it opens without a password.</string>
     <string name="password_card_title">Password protected</string>
     <string name="password_card_text">If you know the password, Arca opens the file inside its sandbox and checks what is in it. The password is used once, kept only in memory and wiped when you close the document.</string>
     <string name="password_button">Enter password</string>

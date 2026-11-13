@@ -75,7 +75,7 @@ impl Op {
     pub const fn known_flags(self) -> u32 {
         match self {
             Self::Scan => 0,
-            Self::Sanitize => flags::SANITIZE_ALL | flags::FULL_SIZE,
+            Self::Sanitize => flags::SANITIZE_ALL | flags::FULL_SIZE | flags::ALLOW_DECRYPTED_COPY,
             Self::Preview => flags::PREVIEW_ALL,
             Self::Render => flags::PAGE_MASK,
             Self::Image => u32::MAX,
@@ -99,6 +99,11 @@ pub mod flags {
     /// Sanitize: a picture keeps up to 16 megapixels instead of 4 (and costs about four times as
     /// much). Not part of [`SANITIZE_ALL`]: it chooses a size, it removes nothing.
     pub const FULL_SIZE: u32 = 16;
+    /// Sanitize: the reader agreed that the sterile copy of a document opened with a password (or
+    /// a built-in one) is written **without** encryption. Without it such a request answers
+    /// [`status::DECRYPTED_COPY_REFUSED`](crate::status::DECRYPTED_COPY_REFUSED). Not part of
+    /// [`SANITIZE_ALL`]: it is a consent, not a cleaning rule (ABI 9).
+    pub const ALLOW_DECRYPTED_COPY: u32 = 32;
     /// Preview: also extract text that the document hides (hidden runs,
     /// hidden sheets and slides, tiny or invisible text), flagged as hidden.
     pub const REVEAL_HIDDEN: u32 = 1;
@@ -261,8 +266,8 @@ mod tests {
         assert_eq!(parse(&bad), Err(RequestError::BadMagic));
 
         let mut bad = good.clone();
-        bad[4] = 9;
-        assert_eq!(parse(&bad), Err(RequestError::VersionMismatch(9)));
+        bad[4] = 99;
+        assert_eq!(parse(&bad), Err(RequestError::VersionMismatch(99)));
 
         let mut bad = good.clone();
         bad[6] = 77;

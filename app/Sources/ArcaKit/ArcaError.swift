@@ -38,6 +38,8 @@ public enum ArcaError: Int32, Error, Equatable, Sendable, LocalizedError {
     case notReady = 13
     /// Provided password failed to decrypt the document.
     case wrongPassword = 14
+    /// The sterile copy of a document opened with a password would not be encrypted; ask first.
+    case decryptedCopyRefused = 15
     /// Unknown error status code.
     case unknown = -1
 
@@ -92,6 +94,8 @@ public enum ArcaError: Int32, Error, Equatable, Sendable, LocalizedError {
             return "Security engine is not ready"
         case .wrongPassword:
             return "Incorrect password"
+        case .decryptedCopyRefused:
+            return "The sterile copy would not be encrypted: the user must agree first"
         case .unknown:
             return "Unknown security engine error"
         }

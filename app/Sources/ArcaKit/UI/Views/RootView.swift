@@ -64,6 +64,15 @@ public struct RootView: View {
         } message: {
             Text("Введите пароль для безопасного разбора содержимого в песочнице.")
         }
+        // Consent to a sterile copy without encryption (the original was opened with a password).
+        .alert("Копия не будет зашифрована", isPresented: $state.isDecryptedCopyConsentVisible) {
+            Button("Создать без шифрования", role: .destructive) {
+                state.sanitizeCurrentDocument(allowDecryptedCopy: true)
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Оригинал защищён паролем (или паролем, который Excel ставит сам). Стерильная копия создаётся из расшифрованного содержимого и откроется без пароля: прочитать её сможет любой, к кому она попадёт.")
+        }
         // Error Alert
         .alert("Ошибка безопасности", isPresented: Binding(
             get: { state.activeError != nil },

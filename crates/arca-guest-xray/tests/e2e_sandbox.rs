@@ -562,3 +562,45 @@ fn guest_picture_copy_equals_native_picture_copy() {
         run_op(&sandbox, &m, Op::Sanitize, flags::SANITIZE_ALL, &bomb, &RunOptions::new()).unwrap();
     assert_ne!(out.status, arca_abi::status::OK);
 }
+
+/// A sterile copy of a document that was opened with a password (the reader's, or the one Excel
+/// applies by itself) would be written without encryption: the real guest refuses it unless the
+/// request carries the reader's consent, and with the consent the copy is an ordinary, unencrypted
+/// file of the content's format.
+#[test]
+fn guest_makes_an_unencrypted_copy_of_a_decrypted_document_only_with_consent() {
+    use arca_abi::request::prefix;
+    use arca_abi::status;
+    let Some(m) = guest() else {
+        eprintln!("skipped: ARCA_GUEST_XRAY_WASM not set");
+        return;
+    };
+    let sandbox = Sandbox::new(SandboxPolicy::default(), [m.pin()]);
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let cases: [(&str, &str, i32, &[u8]); 3] = [
+        ("enc-default.xlsx", "", status::OK_UNLOCKED, b"PK"),
+        ("enc-agile.xlsx", "s3cret", status::OK_DECRYPTED, b"PK"),
+        ("enc-aes-128.pdf", "pässword", status::OK_DECRYPTED, b"%PDF-"),
+    ];
+    for (name, password, success, magic) in cases {
+        let doc = std::fs::read(dir.join(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let ask = |op_flags: u32| {
+            let head = prefix(Op::Sanitize, op_flags, password.as_bytes()).unwrap();
+            sandbox.run_request(&m, &head, &doc, &RunOptions::new()).unwrap()
+        };
+        let refused = ask(flags::SANITIZE_ALL);
+        assert_eq!(
+            refused.status,
+            status::DECRYPTED_COPY_REFUSED,
+            "{name}: no copy without consent"
+        );
+        assert!(decode_sanitized(refused.kind, &refused.payload).is_err(), "{name}");
+        let out = ask(flags::SANITIZE_ALL | flags::ALLOW_DECRYPTED_COPY);
+        assert_eq!(out.status, success, "{name}: with consent");
+        let copy = decode_sanitized(out.kind, &out.payload).unwrap();
+        assert!(copy.bytes.starts_with(magic), "{name}: an ordinary file");
+        if magic == b"%PDF-" {
+            assert!(!copy.bytes.windows(8).any(|w| w == b"/Encrypt"), "{name}: not encrypted");
+        }
+    }
+}

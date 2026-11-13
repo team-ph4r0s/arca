@@ -27,6 +27,9 @@ public enum ArcaFlag {
     public static let stripMetadata = Int32(ARCA_FLAG_STRIP_METADATA)
     /// Sanitize: remove custom XML parts.
     public static let removeCustomXML = Int32(ARCA_FLAG_REMOVE_CUSTOM_XML)
+    /// Sanitize: the user agreed that the copy of a document opened with a password is not encrypted
+    /// (`ARCA_FLAG_ALLOW_DECRYPTED_COPY`); not part of `sanitizeAll`.
+    public static let allowDecryptedCopy = Int32(ARCA_FLAG_ALLOW_DECRYPTED_COPY)
     /// Sanitize: everything above (`ARCA_FLAG_SANITIZE_ALL`).
     public static let sanitizeAll = acceptRevisions | removeComments | stripMetadata | removeCustomXML
     /// Preview: also show hidden content (`ARCA_FLAG_PREVIEW_ALL`).

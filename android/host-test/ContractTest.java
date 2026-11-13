@@ -277,7 +277,7 @@ public final class ContractTest {
                 Model.parseRunInfo(Native.outcomeInfo(outcome));
                 if (strict && !"?".equals(format)) {
                     if (Capabilities.canSanitize(format)) {
-                        check(status == Native.OK, name + ": " + format + " is listed as sanitizable but status was " + status);
+                        check(status == Native.OK || (status == Native.DECRYPTED_COPY_REFUSED && name.startsWith("enc-")), name + ": " + format + " is listed as sanitizable but status was " + status);
                     } else {
                         check(status == Native.UNSUPPORTED, name + ": " + format + " sanitize status " + status);
                     }
@@ -295,7 +295,7 @@ public final class ContractTest {
                         name + ": sterile copy verdict " + si.verdict);
                 } else {
                     check(status == Native.UNSUPPORTED || status == Native.REJECTED || status == Native.FAILED
-                        || status == Native.ENCRYPTED || status == Native.RESOURCE_LIMIT || status == Native.TIMEOUT,
+                        || status == Native.ENCRYPTED || (status == Native.DECRYPTED_COPY_REFUSED && name.startsWith("enc-")) || status == Native.RESOURCE_LIMIT || status == Native.TIMEOUT,
                         name + ": sanitize status " + status);
                     check(Native.sanitizedInfo(outcome) == null, name + ": sterile info for a failed run");
                 }
@@ -372,8 +372,18 @@ public final class ContractTest {
         }
         Native.outcomeFree(outcome);
 
+        // The copy of a decrypted document would not be encrypted: refused without consent.
         outcome = scan(doc, Native.OP_SANITIZE, Native.SANITIZE_ALL);
-        check(outcome > 0 && Native.outcomeStatus(outcome) == Native.OK, name + ": sterile copy with the password");
+        check(outcome > 0 && Native.outcomeStatus(outcome) == Native.DECRYPTED_COPY_REFUSED,
+            name + ": a sterile copy without consent gave status " + (outcome > 0 ? Native.outcomeStatus(outcome) : outcome));
+        check(outcome <= 0 || Native.sanitizedInfo(outcome) == null, name + ": sterile info without consent");
+        Native.outcomeFree(outcome);
+        outcome = scan(doc, Native.OP_SANITIZE, Native.SANITIZE_ALL | Native.SANITIZE_ALLOW_DECRYPTED_COPY);
+        check(outcome > 0 && Native.outcomeStatus(outcome) == Native.OK, name + ": sterile copy with the password and consent");
+        if (outcome > 0 && Native.outcomeStatus(outcome) == Native.OK) {
+            Model.SanitizedInfo si = Model.parseSanitized(Native.sanitizedInfo(outcome));
+            check(si.size > 0, name + ": empty sterile copy");
+        }
         Native.outcomeFree(outcome);
 
         // Forgetting the password makes the document locked again.
