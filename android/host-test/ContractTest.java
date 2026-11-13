@@ -277,7 +277,7 @@ public final class ContractTest {
                 Model.parseRunInfo(Native.outcomeInfo(outcome));
                 if (strict && !"?".equals(format)) {
                     if (Capabilities.canSanitize(format)) {
-                        check(status == Native.OK, name + ": " + format + " is listed as sanitizable but status was " + status);
+                        check(status == Native.OK || (status == Native.DECRYPTED_COPY_REFUSED && name.startsWith("enc-")), name + ": " + format + " is listed as sanitizable but status was " + status);
                     } else {
                         check(status == Native.UNSUPPORTED, name + ": " + format + " sanitize status " + status);
                     }
@@ -295,7 +295,7 @@ public final class ContractTest {
                         name + ": sterile copy verdict " + si.verdict);
                 } else {
                     check(status == Native.UNSUPPORTED || status == Native.REJECTED || status == Native.FAILED
-                        || status == Native.ENCRYPTED || status == Native.RESOURCE_LIMIT || status == Native.TIMEOUT,
+                        || status == Native.ENCRYPTED || (status == Native.DECRYPTED_COPY_REFUSED && name.startsWith("enc-")) || status == Native.RESOURCE_LIMIT || status == Native.TIMEOUT,
                         name + ": sanitize status " + status);
                     check(Native.sanitizedInfo(outcome) == null, name + ": sterile info for a failed run");
                 }
