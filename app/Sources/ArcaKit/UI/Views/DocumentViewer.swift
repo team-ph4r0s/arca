@@ -59,18 +59,32 @@ public struct DocumentViewer: View {
         .onAppear {
             loadInitialItems()
         }
+        // Every link of the document lands here instead of being opened by the system.
+        .environment(\.openURL, OpenURLAction { url in
+            activeExternalUrl = url
+            return .handled
+        })
         .alert("Внешняя ссылка", isPresented: Binding(
             get: { activeExternalUrl != nil },
             set: { if !$0 { activeExternalUrl = nil } }
         )) {
-            Button("Открыть в Safari", role: .none) {
-                if let url = activeExternalUrl {
+            if let url = activeExternalUrl, ExternalLink.isOpenable(url) {
+                Button("Открыть в Safari", role: .none) {
                     UIApplication.shared.open(url)
+                }
+            }
+            Button("Копировать адрес", role: .none) {
+                if let url = activeExternalUrl {
+                    UIPasteboard.general.string = url.absoluteString
                 }
             }
             Button("Отмена", role: .cancel) {}
         } message: {
-            Text(activeExternalUrl?.absoluteString ?? "")
+            if let url = activeExternalUrl {
+                Text(ExternalLink.isOpenable(url)
+                    ? "Ссылка из документа ведёт на:\n\(url.absoluteString)\n\nОткрывайте, только если доверяете адресу."
+                    : "Ссылка из документа:\n\(url.absoluteString)\n\nТакие адреса Arca не открывает: можно только скопировать.")
+            }
         }
     }
 
@@ -325,6 +339,10 @@ public struct DocumentViewer: View {
             if run.href != nil {
                 str.foregroundColor = state.theme.accent
                 str.underlineStyle = .single
+                // A tap goes to the confirmation (see `openURL` below), never straight to the system.
+                if let url = ExternalLink.url(from: run.href) {
+                    str.link = url
+                }
             }
             result.append(str)
         }
